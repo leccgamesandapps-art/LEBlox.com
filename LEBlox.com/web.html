@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>LEBlox | Friend System</title>
+    <link rel="stylesheet" href="page.css">
+</head>
+<body>
+    <!-- LOADING SCREEN -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-content">
+            <div class="loading-logo">
+                <svg class="loading-icon" viewBox="0 0 100 100" fill="none">
+                    <rect x="10" y="10" width="80" height="80" rx="20" fill="url(#logoGradient)" stroke="currentColor" stroke-width="2"/>
+                    <path d="M35 45 L50 30 L65 45" stroke="white" stroke-width="3" fill="none"/>
+                    <path d="M35 55 L50 70 L65 55" stroke="white" stroke-width="3" fill="none"/>
+                    <circle cx="50" cy="50" r="8" fill="white" opacity="0.9"/>
+                    <defs><linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>
+                </svg>
+            </div>
+            <div class="loading-spinner"></div>
+            <h2 class="loading-title" data-i18n="loadingTitle">LEBlox</h2>
+            <p class="loading-subtitle" data-i18n="loadingSubtitle">Loading experience...</p>
+            <div class="offline-message" id="offlineMessage" style="display: none;">
+                <p data-i18n="offlineText">📡 pls check your internet/wifi and try again</p>
+                <button class="retry-btn" id="retryBtn" data-i18n="retryBtn">Retry</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- WELCOME PAGE -->
+    <div class="welcome-page" id="welcomePage" style="display: none;">
+        <div class="welcome-card">
+            <div class="welcome-logo">
+                <svg width="60" height="60" viewBox="0 0 100 100" fill="none">
+                    <rect x="10" y="10" width="80" height="80" rx="20" fill="url(#logoGradient2)" stroke="currentColor" stroke-width="2"/>
+                    <path d="M35 45 L50 30 L65 45" stroke="white" stroke-width="3" fill="none"/>
+                    <path d="M35 55 L50 70 L65 55" stroke="white" stroke-width="3" fill="none"/>
+                    <circle cx="50" cy="50" r="8" fill="white" opacity="0.9"/>
+                    <defs><linearGradient id="logoGradient2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>
+                </svg>
+            </div>
+            <h1 class="welcome-title" data-i18n="welcomeTitle">Welcome to LEBlox</h1>
+            <div class="welcome-buttons">
+                <button class="welcome-btn register-btn" id="welcomeRegisterBtn" data-i18n="registerBtn">Register</button>
+                <button class="welcome-btn login-btn" id="welcomeLoginBtn" data-i18n="loginBtn">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALS -->
+    <div class="modal" id="registerModal"><div class="modal-content"><h2 data-i18n="registerTitle">Register</h2><input type="text" id="regUsername" placeholder="Username" data-i18n-placeholder="usernamePlaceholder" autocomplete="off"><input type="password" id="regPassword" placeholder="Password (8-16 chars)" data-i18n-placeholder="passwordPlaceholder"><div class="password-hint" data-i18n="passwordHint">Must contain uppercase, lowercase, number. Symbol optional.</div><div class="modal-buttons"><button id="registerSubmitBtn" data-i18n="registerSubmit">Register</button><button id="registerCancelBtn" data-i18n="cancelBtn">Cancel</button></div><div id="registerError" class="error-msg"></div></div></div>
+    <div class="modal" id="loginModal"><div class="modal-content"><h2 data-i18n="loginTitle">Login</h2><input type="text" id="loginUsername" placeholder="Username" data-i18n-placeholder="usernamePlaceholder"><input type="password" id="loginPassword" placeholder="Password" data-i18n-placeholder="passwordPlaceholder"><div class="modal-buttons"><button id="loginSubmitBtn" data-i18n="loginSubmit">Login</button><button id="loginCancelBtn" data-i18n="cancelBtn">Cancel</button></div><div id="loginError" class="error-msg"></div></div></div>
+    <div class="modal" id="changePwdModal"><div class="modal-content"><h2 data-i18n="changePwdTitle">Change Password</h2><input type="password" id="oldPassword" placeholder="Current Password" data-i18n-placeholder="oldPasswordPlaceholder"><input type="password" id="newPassword" placeholder="New Password (8-16 chars)" data-i18n-placeholder="newPasswordPlaceholder"><input type="password" id="confirmPassword" placeholder="Confirm New Password" data-i18n-placeholder="confirmPasswordPlaceholder"><div class="modal-buttons"><button id="changePwdSubmitBtn" data-i18n="updateBtn">Update</button><button id="changePwdCancelBtn" data-i18n="cancelBtn">Cancel</button></div><div id="changePwdError" class="error-msg"></div></div></div>
+    <div class="modal" id="showPwdModal"><div class="modal-content"><h2 data-i18n="showPwdTitle">Account Password</h2><div class="show-pwd-field"><span class="pwd-label" data-i18n="passwordLabel">Password:</span><span id="showPasswordValue" class="pwd-value"></span></div><div class="modal-buttons"><button id="changeFromShowBtn" data-i18n="changePasswordBtn">Change Password</button><button id="closeShowPwdBtn" data-i18n="closeBtn">Close</button></div></div></div>
+    <div class="modal" id="changeUsernameModal"><div class="modal-content"><h2 data-i18n="changeUsernameTitle">Change Username</h2><p data-i18n="changeUsernameNotAvailable">Change Username not Available - Tester Only Page</p><div class="modal-buttons"><button id="closeUsernameModalBtn" data-i18n="closeBtn">Close</button></div></div></div>
+
+    <!-- PRIVACY MODAL -->
+    <div class="modal" id="privacyModal">
+        <div class="modal-content privacy-modal">
+            <h3 data-i18n="privacyTitle">Privacy Settings</h3>
+            <div class="privacy-option">
+                <label data-i18n="showUserIdLabel">Show Your User ID:</label>
+                <select id="userIdVisibility">
+                    <option value="noone" data-i18n="noOne">No One</option>
+                    <option value="friends" data-i18n="friendsOnly">Friends</option>
+                    <option value="everyone" data-i18n="everyone">Everyone</option>
+                </select>
+            </div>
+            <div class="privacy-option">
+                <label data-i18n="showFriendsLabel">Show Friends:</label>
+                <select id="friendsVisibility">
+                    <option value="friends" data-i18n="friendsOnly">Friends</option>
+                    <option value="everyone" data-i18n="everyone">Everyone</option>
+                </select>
+            </div>
+            <div class="modal-buttons">
+                <button id="savePrivacyBtn" data-i18n="saveBtn">Save</button>
+                <button id="closePrivacyBtn" data-i18n="closeBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- USER INFO MODAL -->
+    <div class="modal" id="userInfoModal">
+        <div class="modal-content user-info-modal">
+            <h3 data-i18n="userInfoTitle">User Information</h3>
+            <div class="user-info-avatar" id="infoAvatar"></div>
+            <div class="user-info-row"><span class="info-label" data-i18n="displayNameLabel">Display Name:</span> <span id="infoDisplayName"></span></div>
+            <div class="user-info-row"><span class="info-label" data-i18n="usernameLabelShort">Username:</span> <span id="infoUsername"></span></div>
+            <div class="user-info-row"><span class="info-label" data-i18n="userIdLabel">User ID:</span> <span id="infoUserId"></span></div>
+            <div class="user-info-row"><span class="info-label" data-i18n="descriptionLabel">Description:</span> <span id="infoDescription"></span></div>
+            <div class="modal-buttons">
+                <button id="closeUserInfoBtn" data-i18n="closeBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div class="app-container" id="appContainer" style="display: none;">
+        <div class="title-section"><h1 class="app-title" data-i18n="appTitle">LEBlox</h1></div>
+        <main class="main-content">
+            <div class="view-container" id="homeView"><div class="blank-canvas"><p id="homeText" data-i18n="homeText">⚡ Empty Page - Tester Only</p></div></div>
+            <div class="view-container hidden" id="exploreView">
+                <div class="explore-container">
+                    <div class="search-row"><input type="text" id="searchInput" class="search-bar" placeholder="Search..." data-i18n-placeholder="searchPlaceholder"><button id="searchBtn" class="search-logo">🔍</button></div>
+                    <div class="filter-row"><button class="filter-btn all-btn active" data-filter="all" data-i18n="allFilter">All</button><button class="filter-btn user-btn" data-filter="user" data-i18n="userFilter">User</button><button class="filter-btn game-btn" data-filter="game" data-i18n="gameFilter">Game</button></div>
+                    <div class="explore-results" id="exploreResults"></div>
+                </div>
+            </div>
+            <div class="view-container hidden" id="profileView">
+                <div class="profile-container">
+                    <div class="profile-header"><button id="profileSettingsBtn" class="profile-settings-btn">⚙️</button></div>
+                    <div class="profile-top-buttons"><button id="profileInfoBtn" class="profile-top-btn active" data-i18n="profileTab">Profile</button><button id="avatarInfoBtn" class="profile-top-btn" data-i18n="avatarTab">Avatar</button></div>
+                    <div id="profileInfoPanel" class="profile-panel">
+                        <div class="profile-info-card">
+                            <div class="info-row"><span class="info-label" data-i18n="avatarLabel">Avatar:</span><div class="avatar-preview-small" id="profileAvatarPreview">👤</div><button id="changeAvatarBtn" class="small-btn" data-i18n="changeAvatarBtn">Change Avatar</button></div>
+                            <div class="info-row"><span class="info-label" data-i18n="displayNameLabel">Display Name:</span><span id="profileDisplayName" class="info-value"></span><button id="changeDisplayNameBtn" class="small-btn" data-i18n="changeDisplayBtn">Change Display</button></div>
+                            <div class="info-row"><span class="info-label" data-i18n="usernameLabelShort">Username:</span><span id="profileUsername" class="info-value"></span><button id="changeUsernameBtn" class="small-btn" data-i18n="changeUsernameBtn">Change Username</button></div>
+                            <div class="description-section"><div class="info-row"><span class="info-label" data-i18n="descriptionLabel">Description:</span><span id="profileDescription" class="info-value"></span><button id="editDescriptionBtn" class="small-btn" data-i18n="editDescBtn">Edit</button><button id="clearDescriptionBtn" class="small-btn" data-i18n="clearDescBtn">Clear</button></div></div>
+                            <div class="friend-requests-section"><div class="section-title" data-i18n="friendRequestsTitle">Friend Requests</div><div id="friendRequestsList" class="friend-requests-list"></div></div>
+                            <div class="friends-list-section"><div class="section-title" data-i18n="friendsListTitle">Friends</div><div id="friendsList" class="friends-list"></div></div>
+                        </div>
+                    </div>
+                    <div id="avatarPanel" class="profile-panel hidden">
+                        <div class="avatar-section"><div class="avatar-2d-label" data-i18n="avatar2dLabel">2D Avatar</div><div class="avatar-preview-large" id="avatarLargePreview">👤</div></div>
+                        <div class="closet-shop-row"><button id="closetTabBtn" class="cs-tab active" data-i18n="closetTab">Closet</button><button id="shopTabBtn" class="cs-tab" data-i18n="shopTab">Shop</button></div>
+                        <div id="closetPanel" class="cs-panel"><div class="empty-placeholder" data-i18n="closetEmpty">Closet - Empty - Tester Only</div></div>
+                        <div id="shopPanel" class="cs-panel hidden"><div class="empty-placeholder" data-i18n="shopEmpty">Shop - Empty - Tester Only</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="view-container hidden" id="chatView">
+                <div class="categories-container">
+                    <div class="category-card" data-category="all"><div class="category-icon">💬</div><div class="category-name" data-i18n="allChat">All</div></div>
+                    <div class="category-card" data-category="friend"><div class="category-icon">👥</div><div class="category-name" data-i18n="friendChat">Friend</div></div>
+                    <div class="category-card" data-category="group"><div class="category-icon">👨‍👩‍👧‍👦</div><div class="category-name" data-i18n="groupChat">Group Chat</div></div>
+                    <div class="category-card" data-category="community"><div class="category-icon">🌍</div><div class="category-name" data-i18n="communityChat">Community</div></div>
+                </div>
+                <div class="category-content"><div class="category-placeholder"><div class="placeholder-icon">📁</div><p id="categoryText" data-i18n="allChatPlaceholder">All Chat - Empty Page - Tester Only</p></div></div>
+            </div>
+            <div class="view-container hidden" id="settingsView">
+                <div class="settings-container">
+                    <div class="settings-card">
+                        <div class="settings-title" data-i18n="settingsTitle">⚙️ Settings</div>
+                        <div class="account-block"><div class="block-label" data-i18n="accountLabel">ACCOUNT</div><div class="account-info"><div class="info-row"><span class="info-label" data-i18n="displayLabel">Display:</span><span id="accountDisplay" class="info-value"></span></div><div class="info-row"><span class="info-label" data-i18n="usernameLabel">Username:</span><span id="accountUsername" class="info-value"></span></div><div class="info-row"><span class="info-label" data-i18n="userIdLabel">User ID:</span><span id="accountUserId" class="info-value"></span></div></div></div>
+                        <div class="security-block"><div class="block-label" data-i18n="securityLabel">SECURITY</div><div class="security-row"><span class="info-label" data-i18n="passwordLabelShort">Password:</span><span id="passwordBlur" class="info-value">••••••••</span><button id="showPasswordBtn" class="small-btn" data-i18n="showPasswordBtn">Show password</button></div><button id="changePasswordBtn" class="sec-btn" data-i18n="changePasswordBtn">Change Password</button></div>
+                        <div class="language-block"><div class="block-label" data-i18n="languageLabel">LANGUAGE</div><select id="languageSelect" class="language-select"><option value="en">🇬🇧 English</option><option value="es">🇪🇸 Español</option><option value="fr">🇫🇷 Français</option><option value="de">🇩🇪 Deutsch</option><option value="ja">🇯🇵 日本語</option></select></div>
+                        <div class="theme-block"><div class="block-label" data-i18n="themeLabel">THEME</div><div class="theme-buttons"><button class="theme-btn white-theme" id="whiteThemeBtn" data-i18n="whiteTheme">☀️ White</button><button class="theme-btn black-theme" id="blackThemeBtn" data-i18n="blackTheme">🌙 Black</button></div></div>
+                        <div class="about-block"><div class="block-label" data-i18n="aboutLabel">ABOUT</div><div class="about-info"><div class="about-line"><span class="about-label" data-i18n="nameLabel">Name:</span><span class="about-value">LEBlox</span></div><div class="about-line"><span class="about-label" data-i18n="websiteLabel">Website:</span><span class="about-value">LEBlox.com</span></div><div class="about-line"><span class="about-label" data-i18n="versionLabel">Version:</span><span class="about-value">V1.0</span></div></div></div>
+                        <button id="logoutBtn" class="logout-btn" data-i18n="logoutBtn">Log out</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <nav class="bottom-menu">
+            <button class="menu-item active" id="homeMenuBtn"><svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12L12 3l9 9"/><path d="M5 10v8a2 2 0 002 2h10a2 2 0 002-2v-8"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg><span data-i18n="homeMenu">Home</span></button>
+            <button class="menu-item" id="exploreMenuBtn"><svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 2a15 15 0 0 0 0 20 15 15 0 0 0 0-20z"/><circle cx="12" cy="12" r="4"/></svg><span data-i18n="exploreMenu">Explore</span></button>
+            <button class="menu-item" id="profileMenuBtn"><svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span data-i18n="profileMenu">Profile</span></button>
+            <button class="menu-item" id="chatMenuBtn"><svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span data-i18n="chatMenu">Chat</span></button>
+            <button class="menu-item" id="settingsMenuBtn"><svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span data-i18n="settingsMenu">Settings</span></button>
+        </nav>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

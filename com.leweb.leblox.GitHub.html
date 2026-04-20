@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>LEBlox Tester HTML</title>
+    <title>GitIndex - LEBlox Launcher</title>
     <style>
         * {
             margin: 0;
@@ -43,6 +43,11 @@
             background-clip: text;
             -webkit-background-clip: text;
             color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        .subtitle {
+            font-size: 0.85rem;
+            opacity: 0.6;
             margin-bottom: 1.5rem;
         }
         .btn {
@@ -68,15 +73,6 @@
         }
         .btn-start:hover {
             background: #2563eb;
-            transform: scale(1.02);
-        }
-        .btn-download {
-            background: #1e1f2c;
-            border: 1px solid #3a3a4a;
-            color: #eef2ff;
-        }
-        .btn-download:hover {
-            background: #2a2b3a;
             transform: scale(1.02);
         }
         .footer {
@@ -110,15 +106,15 @@
                 </defs>
             </svg>
         </div>
-        <h1>LEBlox Tester HTML</h1>
-        <button class="btn btn-start" id="runHtmlBtn">🚀 Run HTML</button>
-        <a href="LEBlox.com/LEBlox.zip" class="btn btn-download">📦 Download LEBlox.zip</a>
-        <div class="footer">Run HTML opens the app in a new tab, and make sure use desktop site in mobile chrome or browser.<br>Download gets web.html, page.css, script.js</div>
+        <h1>GitHub</h1>
+        <div class="subtitle">GitHub Pages Launcher</div>
+        <button class="btn btn-start" id="launchBtn">🚀 Launch Index.html</button>
+        <div class="footer">Click the button to open GitHub Index.html</div>
     </div>
 
     <script>
-        document.getElementById('runHtmlBtn').addEventListener('click', function() {
-            window.open('LEBlox.com/web.html', '_blank');
+        document.getElementById('launchBtn').addEventListener('click', function() {
+            window.open('com.leweb.leblox/index.html', '_blank');
         });
     </script>
 </body>

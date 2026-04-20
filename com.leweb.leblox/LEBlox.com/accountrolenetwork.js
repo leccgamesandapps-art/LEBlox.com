@@ -14,9 +14,13 @@
         ADMIN_LIST: 'leblox_admins'
     };
 
-    // Owner and Admin lists (YOU are the owner)
-    const OWNER_LIST = ['LEOwner'];
-    const ADMIN_LIST = ['LETester'];
+    // Role definitions - DO NOT CHANGE THESE
+    const OWNER_USERNAME = 'LEOwner';
+    const ADMIN_USERNAME = 'LETester';
+    
+    // Owner and Admin lists (hardcoded - cannot be changed)
+    const OWNER_LIST = [OWNER_USERNAME];
+    const ADMIN_LIST = [ADMIN_USERNAME];
 
     // Event listeners
     const eventListeners = {
@@ -108,23 +112,7 @@
     }
 
     function isOwner(username) {
-        var owners = getOwners();
-        return owners.includes(username);
-    }
-
-    function addOwner(username) {
-        var owners = getOwners();
-        if (!owners.includes(username)) {
-            owners.push(username);
-            setOwners(owners);
-            // Also update user role
-            var user = getUser(username);
-            if (user) {
-                user.role = 'owner';
-                saveUsers();
-            }
-        }
-        return owners;
+        return username === OWNER_USERNAME;
     }
 
     // ==================== ADMIN LIST FUNCTIONS ====================
@@ -144,9 +132,7 @@
     }
 
     function isAdmin(username) {
-        var admins = getAdmins();
-        var owners = getOwners();
-        return admins.includes(username) || owners.includes(username);
+        return username === ADMIN_USERNAME;
     }
 
     function canAccessAdminPanel(username) {
@@ -168,14 +154,13 @@
 
     function addUser(user) {
         var users = getUsers();
-        var owners = getOwners();
-        var admins = getAdmins();
-        if (owners.includes(user.username)) {
+        // Set role based on username
+        if (user.username === OWNER_USERNAME) {
             user.role = 'owner';
-        } else if (admins.includes(user.username)) {
+        } else if (user.username === ADMIN_USERNAME) {
             user.role = 'admin';
         } else {
-            user.role = user.role || 'member';
+            user.role = 'member';
         }
         users.push(user);
         setUsers(users);
@@ -205,9 +190,8 @@
     }
 
     function deleteUser(username) {
-        var owners = getOwners();
-        var admins = getAdmins();
-        if (owners.includes(username) || admins.includes(username)) {
+        // Cannot delete Owner or Admin
+        if (isOwner(username) || isAdmin(username)) {
             return false;
         }
         var users = getUsers();
@@ -221,7 +205,7 @@
         return true;
     }
 
-    // ==================== VERIFY LOGIN (SYNCED WITH PASSWORD) ====================
+    // ==================== VERIFY LOGIN ====================
     function verifyLogin(username, password) {
         var user = getUser(username);
         if (!user) return false;
@@ -269,9 +253,8 @@
     }
 
     function banUser(username) {
-        var owners = getOwners();
-        var admins = getAdmins();
-        if (owners.includes(username) || admins.includes(username)) return false;
+        // Cannot ban Owner or Admin
+        if (isOwner(username) || isAdmin(username)) return false;
         var banned = getBanned();
         banned[username] = true;
         setBanned(banned);
@@ -306,9 +289,8 @@
     }
 
     function suspendUser(username, durationHours) {
-        var owners = getOwners();
-        var admins = getAdmins();
-        if (owners.includes(username) || admins.includes(username)) return false;
+        // Cannot suspend Owner or Admin
+        if (isOwner(username) || isAdmin(username)) return false;
         var suspended = getSuspended();
         var untilTimestamp = Date.now() + (durationHours * 60 * 60 * 1000);
         suspended[username] = untilTimestamp;
@@ -325,8 +307,6 @@
 
     // ==================== ROLE OPERATIONS ====================
     function getUserRole(username) {
-        var user = getUser(username);
-        if (user) return user.role;
         if (isOwner(username)) return 'owner';
         if (isAdmin(username)) return 'admin';
         return 'member';
@@ -342,22 +322,25 @@
     function canModifyRole(adminUsername, targetUsername) {
         var adminRole = getUserRole(adminUsername);
         var targetRole = getUserRole(targetUsername);
+        // Only Owner can modify roles, Admin cannot modify anyone
         if (adminRole === 'owner') return true;
-        if (adminRole === 'admin' && targetRole !== 'owner' && targetRole !== 'admin') return true;
         return false;
     }
 
     function canBanSuspend(adminUsername, targetUsername) {
         var adminRole = getUserRole(adminUsername);
         var targetRole = getUserRole(targetUsername);
+        // Owner cannot ban/suspend themselves
         if (adminRole === 'owner' && targetRole === 'owner') return false;
-        if (adminRole === 'admin' && (targetRole === 'owner' || targetRole === 'admin')) return false;
-        return true;
+        // Owner can ban/suspend anyone except themselves
+        if (adminRole === 'owner') return true;
+        // Admin cannot ban/suspend anyone (only members, but members cannot access admin panel)
+        return false;
     }
 
     // ==================== GET LISTS ====================
-    function getOwnerList() { return getOwners(); }
-    function getAdminList() { return getAdmins(); }
+    function getOwnerList() { return OWNER_LIST; }
+    function getAdminList() { return ADMIN_LIST; }
 
     // ==================== EVENT LISTENERS ====================
     function on(eventName, callback) {
@@ -400,19 +383,17 @@
     // ==================== FIX EXISTING USERS' ROLES ====================
     function fixUserRoles() {
         var users = getUsers();
-        var owners = getOwners();
-        var admins = getAdmins();
         var changed = false;
         
         for (var i = 0; i < users.length; i++) {
             var user = users[i];
-            if (owners.includes(user.username) && user.role !== 'owner') {
+            if (user.username === OWNER_USERNAME && user.role !== 'owner') {
                 user.role = 'owner';
                 changed = true;
-            } else if (admins.includes(user.username) && user.role !== 'admin') {
+            } else if (user.username === ADMIN_USERNAME && user.role !== 'admin') {
                 user.role = 'admin';
                 changed = true;
-            } else if (!owners.includes(user.username) && !admins.includes(user.username) && user.role !== 'member') {
+            } else if (user.username !== OWNER_USERNAME && user.username !== ADMIN_USERNAME && user.role !== 'member') {
                 user.role = 'member';
                 changed = true;
             }
@@ -427,32 +408,39 @@
     // ==================== EXPOSE API ====================
     var AccountRoleNetwork = {
         STORAGE_KEYS: STORAGE_KEYS,
+        // User operations
         getAllUsers: getAllUsers,
         getUser: getUser,
         addUser: addUser,
         updateUser: updateUser,
         deleteUser: deleteUser,
         verifyLogin: verifyLogin,
+        // Report operations
         getAllReports: getAllReports,
         addReport: addReport,
         deleteReport: deleteReport,
         getReportsForUser: getReportsForUser,
+        // Ban operations
         isBanned: isBanned,
         banUser: banUser,
         unbanUser: unbanUser,
+        // Suspension operations
         isSuspended: isSuspended,
         getSuspensionTimeRemaining: getSuspensionTimeRemaining,
         suspendUser: suspendUser,
         unsuspendUser: unsuspendUser,
+        // Role operations
         getUserRole: getUserRole,
         getUserRoleBadge: getUserRoleBadge,
         canModifyRole: canModifyRole,
         canBanSuspend: canBanSuspend,
+        // Lists
         getOwnerList: getOwnerList,
         getAdminList: getAdminList,
         isOwner: isOwner,
         isAdmin: isAdmin,
         canAccessAdminPanel: canAccessAdminPanel,
+        // Events
         on: on,
         off: off,
         syncAll: syncAll,
@@ -461,12 +449,12 @@
     };
 
     AccountRoleNetwork.initCrossTabSync();
-    AccountRoleNetwork.fixUserRoles(); // Auto-fix existing user roles
+    AccountRoleNetwork.fixUserRoles();
 
     window.AccountRoleNetwork = AccountRoleNetwork;
     window.ARN = AccountRoleNetwork;
 
     console.log('Account Role Network initialized.');
-    console.log('Owners:', AccountRoleNetwork.getOwnerList());
-    console.log('Admins:', AccountRoleNetwork.getAdminList());
+    console.log('Owner:', AccountRoleNetwork.getOwnerList()[0]);
+    console.log('Admin:', AccountRoleNetwork.getAdminList()[0]);
 })();

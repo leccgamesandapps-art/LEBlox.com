@@ -1,6 +1,7 @@
 // ==================== ACCOUNT ROLE NETWORK ====================
 // This file connects script.js and script2.js through a shared event system
 // It ensures real-time synchronization of users, reports, bans, suspensions, and roles
+// Passwords are synced automatically because both apps use the same STORAGE_USERS
 
 (function() {
     // Storage keys (must match both script.js and script2.js)
@@ -10,8 +11,14 @@
         BANNED: 'leblox_banned',
         SUSPENDED: 'leblox_suspended',
         CURRENT_USER: 'leblox_currentUser',
-        NEXT_ID: 'leblox_nextId'
+        NEXT_ID: 'leblox_nextId',
+        OWNER_LIST: 'leblox_owners',
+        ADMIN_LIST: 'leblox_admins'
     };
+
+    // Owner and Admin lists (hardcoded)
+    const OWNER_LIST = ['LEOwner'];
+    const ADMIN_LIST = ['LETester'];
 
     // Event listeners registry
     const eventListeners = {
@@ -20,6 +27,8 @@
         bannedUpdated: [],
         suspendedUpdated: [],
         currentUserUpdated: [],
+        ownersUpdated: [],
+        adminsUpdated: [],
         anyChange: []
     };
 
@@ -34,7 +43,6 @@
                 }
             });
         }
-        // Dispatch to anyChange listeners
         eventListeners.anyChange.forEach(callback => {
             try {
                 callback({ type: eventName, data: data });
@@ -103,238 +111,376 @@
         return localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
     }
 
-    // ==================== CORE OPERATIONS ====================
-    var AccountRoleNetwork = {
-        // Storage keys (for reference)
-        STORAGE_KEYS: STORAGE_KEYS,
-
-        // ========== USER OPERATIONS ==========
-        getAllUsers: function() {
-            return getUsers();
-        },
-
-        getUser: function(username) {
-            var users = getUsers();
-            for (var i = 0; i < users.length; i++) {
-                if (users[i].username === username) return users[i];
-            }
-            return null;
-        },
-
-        addUser: function(user) {
-            var users = getUsers();
-            users.push(user);
-            setUsers(users);
-            return user;
-        },
-
-        updateUser: function(username, updates) {
-            var users = getUsers();
-            for (var i = 0; i < users.length; i++) {
-                if (users[i].username === username) {
-                    for (var key in updates) {
-                        if (updates.hasOwnProperty(key)) {
-                            users[i][key] = updates[key];
-                        }
-                    }
-                    setUsers(users);
-                    return users[i];
-                }
-            }
-            return null;
-        },
-
-        deleteUser: function(username) {
-            var users = getUsers();
-            var filtered = [];
-            for (var i = 0; i < users.length; i++) {
-                if (users[i].username !== username) {
-                    filtered.push(users[i]);
-                }
-            }
-            setUsers(filtered);
-            return true;
-        },
-
-        // ========== REPORT OPERATIONS ==========
-        getAllReports: function() {
-            return getReports();
-        },
-
-        addReport: function(report) {
-            var reports = getReports();
-            var newReport = {
-                reportedUser: report.reportedUser,
-                reporter: report.reporter,
-                reason: report.reason,
-                timestamp: report.timestamp || Date.now()
-            };
-            reports.push(newReport);
-            setReports(reports);
-            return newReport;
-        },
-
-        deleteReport: function(index) {
-            var reports = getReports();
-            if (index >= 0 && index < reports.length) {
-                reports.splice(index, 1);
-                setReports(reports);
-                return true;
-            }
-            return false;
-        },
-
-        getReportsForUser: function(username) {
-            var reports = getReports();
-            var result = [];
-            for (var i = 0; i < reports.length; i++) {
-                if (reports[i].reportedUser === username) {
-                    result.push(reports[i]);
-                }
-            }
-            return result;
-        },
-
-        // ========== BAN OPERATIONS ==========
-        isBanned: function(username) {
-            var banned = getBanned();
-            return banned[username] === true;
-        },
-
-        banUser: function(username) {
-            var banned = getBanned();
-            banned[username] = true;
-            setBanned(banned);
-            this.deleteUser(username);
-            return true;
-        },
-
-        unbanUser: function(username) {
-            var banned = getBanned();
-            delete banned[username];
-            setBanned(banned);
-            return true;
-        },
-
-        // ========== SUSPENSION OPERATIONS ==========
-        isSuspended: function(username) {
-            var suspended = getSuspended();
-            if (suspended[username] && suspended[username] > Date.now()) {
-                return true;
-            }
-            if (suspended[username] && suspended[username] <= Date.now()) {
-                this.unsuspendUser(username);
-                return false;
-            }
-            return false;
-        },
-
-        getSuspensionTimeRemaining: function(username) {
-            var suspended = getSuspended();
-            if (suspended[username] && suspended[username] > Date.now()) {
-                return suspended[username] - Date.now();
-            }
-            return 0;
-        },
-
-        suspendUser: function(username, durationHours) {
-            var suspended = getSuspended();
-            var untilTimestamp = Date.now() + (durationHours * 60 * 60 * 1000);
-            suspended[username] = untilTimestamp;
-            setSuspended(suspended);
-            return untilTimestamp;
-        },
-
-        unsuspendUser: function(username) {
-            var suspended = getSuspended();
-            delete suspended[username];
-            setSuspended(suspended);
-            return true;
-        },
-
-        // ========== ROLE OPERATIONS ==========
-        getUserRole: function(username) {
-            var user = this.getUser(username);
-            return user ? user.role : null;
-        },
-
-        setUserRole: function(username, role) {
-            return this.updateUser(username, { role: role });
-        },
-
-        isOwner: function(username) {
-            var user = this.getUser(username);
-            return user && user.role === 'owner';
-        },
-
-        isAdmin: function(username) {
-            var user = this.getUser(username);
-            return user && (user.role === 'owner' || user.role === 'admin');
-        },
-
-        canModifyRole: function(adminUsername, targetUsername) {
-            var admin = this.getUser(adminUsername);
-            var target = this.getUser(targetUsername);
-            if (!admin || !target) return false;
-            if (admin.role === 'owner') return true;
-            if (admin.role === 'admin' && target.role !== 'owner' && target.role !== 'admin') return true;
-            return false;
-        },
-
-        canBanSuspend: function(adminUsername, targetUsername) {
-            var admin = this.getUser(adminUsername);
-            var target = this.getUser(targetUsername);
-            if (!admin || !target) return false;
-            if (admin.role === 'owner' && target.role === 'owner') return false;
-            if (admin.role === 'admin' && (target.role === 'owner' || target.role === 'admin')) return false;
-            return true;
-        },
-
-        // ========== EVENT LISTENERS ==========
-        on: function(eventName, callback) {
-            if (eventListeners[eventName]) {
-                eventListeners[eventName].push(callback);
-            } else {
-                console.warn('Unknown event: ' + eventName);
-            }
-        },
-
-        off: function(eventName, callback) {
-            if (eventListeners[eventName]) {
-                var index = eventListeners[eventName].indexOf(callback);
-                if (index !== -1) {
-                    eventListeners[eventName].splice(index, 1);
-                }
-            }
-        },
-
-        // ========== FORCE SYNC ==========
-        syncAll: function() {
-            dispatchEvent('usersUpdated', getUsers());
-            dispatchEvent('reportsUpdated', getReports());
-            dispatchEvent('bannedUpdated', getBanned());
-            dispatchEvent('suspendedUpdated', getSuspended());
-            dispatchEvent('currentUserUpdated', getCurrentUser());
-        },
-
-        // ========== CROSS-TAB COMMUNICATION ==========
-        initCrossTabSync: function() {
-            var self = this;
-            window.addEventListener('storage', function(e) {
-                if (e.key === STORAGE_KEYS.USERS) {
-                    dispatchEvent('usersUpdated', getUsers());
-                } else if (e.key === STORAGE_KEYS.REPORTS) {
-                    dispatchEvent('reportsUpdated', getReports());
-                } else if (e.key === STORAGE_KEYS.BANNED) {
-                    dispatchEvent('bannedUpdated', getBanned());
-                } else if (e.key === STORAGE_KEYS.SUSPENDED) {
-                    dispatchEvent('suspendedUpdated', getSuspended());
-                } else if (e.key === STORAGE_KEYS.CURRENT_USER) {
-                    dispatchEvent('currentUserUpdated', getCurrentUser());
-                }
-                dispatchEvent('anyChange', { key: e.key, newValue: e.newValue, oldValue: e.oldValue });
-            });
+    // ==================== OWNER LIST FUNCTIONS ====================
+    function getOwners() {
+        var stored = localStorage.getItem(STORAGE_KEYS.OWNER_LIST);
+        if (stored) {
+            return JSON.parse(stored);
         }
+        setOwners(OWNER_LIST);
+        return OWNER_LIST;
+    }
+
+    function setOwners(owners) {
+        localStorage.setItem(STORAGE_KEYS.OWNER_LIST, JSON.stringify(owners));
+        dispatchEvent('ownersUpdated', owners);
+        return owners;
+    }
+
+    function isOwner(username) {
+        var owners = getOwners();
+        return owners.includes(username);
+    }
+
+    // ==================== ADMIN LIST FUNCTIONS ====================
+    function getAdmins() {
+        var stored = localStorage.getItem(STORAGE_KEYS.ADMIN_LIST);
+        if (stored) {
+            return JSON.parse(stored);
+        }
+        setAdmins(ADMIN_LIST);
+        return ADMIN_LIST;
+    }
+
+    function setAdmins(admins) {
+        localStorage.setItem(STORAGE_KEYS.ADMIN_LIST, JSON.stringify(admins));
+        dispatchEvent('adminsUpdated', admins);
+        return admins;
+    }
+
+    function isAdmin(username) {
+        var admins = getAdmins();
+        var owners = getOwners();
+        return admins.includes(username) || owners.includes(username);
+    }
+
+    function canAccessAdminPanel(username) {
+        return isAdmin(username) || isOwner(username);
+    }
+
+    // ==================== USER OPERATIONS ====================
+    function getAllUsers() {
+        return getUsers();
+    }
+
+    function getUser(username) {
+        var users = getUsers();
+        for (var i = 0; i < users.length; i++) {
+            if (users[i].username === username) return users[i];
+        }
+        return null;
+    }
+
+    function addUser(user) {
+        var users = getUsers();
+        var owners = getOwners();
+        var admins = getAdmins();
+        if (owners.includes(user.username)) {
+            user.role = 'owner';
+        } else if (admins.includes(user.username)) {
+            user.role = 'admin';
+        } else {
+            user.role = user.role || 'member';
+        }
+        users.push(user);
+        setUsers(users);
+        return user;
+    }
+
+    function updateUser(username, updates) {
+        var users = getUsers();
+        for (var i = 0; i < users.length; i++) {
+            if (users[i].username === username) {
+                for (var key in updates) {
+                    if (updates.hasOwnProperty(key)) {
+                        users[i][key] = updates[key];
+                    }
+                }
+                setUsers(users);
+                return users[i];
+            }
+        }
+        return null;
+    }
+
+    function deleteUser(username) {
+        var owners = getOwners();
+        var admins = getAdmins();
+        if (owners.includes(username) || admins.includes(username)) {
+            return false;
+        }
+        var users = getUsers();
+        var filtered = [];
+        for (var i = 0; i < users.length; i++) {
+            if (users[i].username !== username) {
+                filtered.push(users[i]);
+            }
+        }
+        setUsers(filtered);
+        return true;
+    }
+
+    // ==================== PASSWORD SYNC (AUTO - uses same STORAGE_USERS) ====================
+    // No special function needed because both web.html and web2.html read from the same
+    // STORAGE_USERS in localStorage. When password changes in web.html, it updates the user
+    // object and saves to localStorage. web2.html will read the updated password on next login.
+    
+    function verifyLogin(username, password) {
+        var user = getUser(username);
+        if (!user) return false;
+        return user.password === password;
+    }
+
+    // ==================== REPORT OPERATIONS ====================
+    function getAllReports() {
+        return getReports();
+    }
+
+    function addReport(report) {
+        var reports = getReports();
+        var newReport = {
+            reportedUser: report.reportedUser,
+            reporter: report.reporter,
+            reason: report.reason,
+            timestamp: report.timestamp || Date.now()
+        };
+        reports.push(newReport);
+        setReports(reports);
+        return newReport;
+    }
+
+    function deleteReport(index) {
+        var reports = getReports();
+        if (index >= 0 && index < reports.length) {
+            reports.splice(index, 1);
+            setReports(reports);
+            return true;
+        }
+        return false;
+    }
+
+    function getReportsForUser(username) {
+        var reports = getReports();
+        var result = [];
+        for (var i = 0; i < reports.length; i++) {
+            if (reports[i].reportedUser === username) {
+                result.push(reports[i]);
+            }
+        }
+        return result;
+    }
+
+    // ==================== BAN OPERATIONS ====================
+    function isBanned(username) {
+        var banned = getBanned();
+        return banned[username] === true;
+    }
+
+    function banUser(username) {
+        var owners = getOwners();
+        var admins = getAdmins();
+        if (owners.includes(username) || admins.includes(username)) {
+            return false;
+        }
+        var banned = getBanned();
+        banned[username] = true;
+        setBanned(banned);
+        deleteUser(username);
+        return true;
+    }
+
+    function unbanUser(username) {
+        var banned = getBanned();
+        delete banned[username];
+        setBanned(banned);
+        return true;
+    }
+
+    // ==================== SUSPENSION OPERATIONS ====================
+    function isSuspended(username) {
+        var suspended = getSuspended();
+        if (suspended[username] && suspended[username] > Date.now()) {
+            return true;
+        }
+        if (suspended[username] && suspended[username] <= Date.now()) {
+            unsuspendUser(username);
+            return false;
+        }
+        return false;
+    }
+
+    function getSuspensionTimeRemaining(username) {
+        var suspended = getSuspended();
+        if (suspended[username] && suspended[username] > Date.now()) {
+            return suspended[username] - Date.now();
+        }
+        return 0;
+    }
+
+    function suspendUser(username, durationHours) {
+        var owners = getOwners();
+        var admins = getAdmins();
+        if (owners.includes(username) || admins.includes(username)) {
+            return false;
+        }
+        var suspended = getSuspended();
+        var untilTimestamp = Date.now() + (durationHours * 60 * 60 * 1000);
+        suspended[username] = untilTimestamp;
+        setSuspended(suspended);
+        return untilTimestamp;
+    }
+
+    function unsuspendUser(username) {
+        var suspended = getSuspended();
+        delete suspended[username];
+        setSuspended(suspended);
+        return true;
+    }
+
+    // ==================== ROLE OPERATIONS ====================
+    function getUserRole(username) {
+        var user = getUser(username);
+        if (user) return user.role;
+        if (isOwner(username)) return 'owner';
+        if (isAdmin(username)) return 'admin';
+        return 'member';
+    }
+
+    function getUserRoleBadge(username) {
+        var role = getUserRole(username);
+        if (role === 'owner') return '<span class="role-badge owner">👑 Owner</span>';
+        if (role === 'admin') return '<span class="role-badge admin">⚙️ Admin</span>';
+        return '<span class="role-badge member">👤 Member</span>';
+    }
+
+    function canModifyRole(adminUsername, targetUsername) {
+        var adminRole = getUserRole(adminUsername);
+        var targetRole = getUserRole(targetUsername);
+        if (adminRole === 'owner') return true;
+        if (adminRole === 'admin' && targetRole !== 'owner' && targetRole !== 'admin') return true;
+        return false;
+    }
+
+    function canBanSuspend(adminUsername, targetUsername) {
+        var adminRole = getUserRole(adminUsername);
+        var targetRole = getUserRole(targetUsername);
+        if (adminRole === 'owner' && targetRole === 'owner') return false;
+        if (adminRole === 'admin' && (targetRole === 'owner' || targetRole === 'admin')) return false;
+        return true;
+    }
+
+    // ==================== GET LISTS ====================
+    function getOwnerList() {
+        return getOwners();
+    }
+
+    function getAdminList() {
+        return getAdmins();
+    }
+
+    // ==================== EVENT LISTENERS ====================
+    function on(eventName, callback) {
+        if (eventListeners[eventName]) {
+            eventListeners[eventName].push(callback);
+        } else {
+            console.warn('Unknown event: ' + eventName);
+        }
+    }
+
+    function off(eventName, callback) {
+        if (eventListeners[eventName]) {
+            var index = eventListeners[eventName].indexOf(callback);
+            if (index !== -1) {
+                eventListeners[eventName].splice(index, 1);
+            }
+        }
+    }
+
+    // ==================== FORCE SYNC ====================
+    function syncAll() {
+        dispatchEvent('usersUpdated', getUsers());
+        dispatchEvent('reportsUpdated', getReports());
+        dispatchEvent('bannedUpdated', getBanned());
+        dispatchEvent('suspendedUpdated', getSuspended());
+        dispatchEvent('currentUserUpdated', getCurrentUser());
+        dispatchEvent('ownersUpdated', getOwners());
+        dispatchEvent('adminsUpdated', getAdmins());
+    }
+
+    // ==================== CROSS-TAB COMMUNICATION ====================
+    function initCrossTabSync() {
+        window.addEventListener('storage', function(e) {
+            if (e.key === STORAGE_KEYS.USERS) {
+                dispatchEvent('usersUpdated', getUsers());
+            } else if (e.key === STORAGE_KEYS.REPORTS) {
+                dispatchEvent('reportsUpdated', getReports());
+            } else if (e.key === STORAGE_KEYS.BANNED) {
+                dispatchEvent('bannedUpdated', getBanned());
+            } else if (e.key === STORAGE_KEYS.SUSPENDED) {
+                dispatchEvent('suspendedUpdated', getSuspended());
+            } else if (e.key === STORAGE_KEYS.CURRENT_USER) {
+                dispatchEvent('currentUserUpdated', getCurrentUser());
+            } else if (e.key === STORAGE_KEYS.OWNER_LIST) {
+                dispatchEvent('ownersUpdated', getOwners());
+            } else if (e.key === STORAGE_KEYS.ADMIN_LIST) {
+                dispatchEvent('adminsUpdated', getAdmins());
+            }
+            dispatchEvent('anyChange', { key: e.key, newValue: e.newValue, oldValue: e.oldValue });
+        });
+    }
+
+    // ==================== EXPOSE PUBLIC API ====================
+    var AccountRoleNetwork = {
+        // Storage keys
+        STORAGE_KEYS: STORAGE_KEYS,
+        
+        // User operations
+        getAllUsers: getAllUsers,
+        getUser: getUser,
+        addUser: addUser,
+        updateUser: updateUser,
+        deleteUser: deleteUser,
+        verifyLogin: verifyLogin,
+        
+        // Report operations
+        getAllReports: getAllReports,
+        addReport: addReport,
+        deleteReport: deleteReport,
+        getReportsForUser: getReportsForUser,
+        
+        // Ban operations
+        isBanned: isBanned,
+        banUser: banUser,
+        unbanUser: unbanUser,
+        
+        // Suspension operations
+        isSuspended: isSuspended,
+        getSuspensionTimeRemaining: getSuspensionTimeRemaining,
+        suspendUser: suspendUser,
+        unsuspendUser: unsuspendUser,
+        
+        // Role operations
+        getUserRole: getUserRole,
+        getUserRoleBadge: getUserRoleBadge,
+        canModifyRole: canModifyRole,
+        canBanSuspend: canBanSuspend,
+        
+        // Owner list operations
+        getOwnerList: getOwnerList,
+        isOwner: isOwner,
+        
+        // Admin list operations
+        getAdminList: getAdminList,
+        isAdmin: isAdmin,
+        canAccessAdminPanel: canAccessAdminPanel,
+        
+        // Event listeners
+        on: on,
+        off: off,
+        
+        // Sync
+        syncAll: syncAll,
+        initCrossTabSync: initCrossTabSync
     };
 
     // Auto-initialize cross-tab sync
@@ -344,5 +490,8 @@
     window.AccountRoleNetwork = AccountRoleNetwork;
     window.ARN = AccountRoleNetwork;
 
-    console.log('Account Role Network initialized. Use window.AccountRoleNetwork or window.ARN');
+    console.log('Account Role Network initialized.');
+    console.log('Owners:', AccountRoleNetwork.getOwnerList());
+    console.log('Admins:', AccountRoleNetwork.getAdminList());
+    console.log('Password sync active - both apps share the same user data.');
 })();

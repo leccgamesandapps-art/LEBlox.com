@@ -13,7 +13,7 @@
         </div>
 
         <main class="main-content">
-            <!-- LOGIN VIEW (shown first) -->
+            <!-- LOGIN VIEW -->
             <div class="view-container" id="loginView">
                 <div class="login-container">
                     <div class="login-card">
@@ -26,7 +26,7 @@
                 </div>
             </div>
 
-            <!-- MAIN ADMIN VIEW (hidden until login) -->
+            <!-- MAIN ADMIN VIEW -->
             <div id="adminMainView" style="display: none;">
                 <div class="view-container" id="homeView">
                     <div class="reports-container">
@@ -77,34 +77,21 @@
             </div>
         </main>
 
-        <!-- Bottom Menu (only visible after login) -->
         <nav class="bottom-menu" id="adminMenu" style="display: none;">
             <button class="menu-item active" id="homeMenuBtn">
-                <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M3 12L12 3l9 9"/>
-                    <path d="M5 10v8a2 2 0 002 2h10a2 2 0 002-2v-8"/>
-                    <path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/>
-                </svg>
+                <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12L12 3l9 9"/><path d="M5 10v8a2 2 0 002 2h10a2 2 0 002-2v-8"/><path d="M9 21v-6a2 2 0 012-2h2a2 2 0 012 2v6"/></svg>
                 <span>Home</span>
             </button>
             <button class="menu-item" id="userMenuBtn">
-                <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                    <circle cx="12" cy="7" r="4"/>
-                </svg>
+                <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <span>User</span>
             </button>
             <button class="menu-item" id="roleMenuBtn">
-                <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M12 2L15 8.5L22 9.5L17 14L18.5 21L12 17.5L5.5 21L7 14L2 9.5L9 8.5L12 2z"/>
-                </svg>
+                <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2L15 8.5L22 9.5L17 14L18.5 21L12 17.5L5.5 21L7 14L2 9.5L9 8.5L12 2z"/></svg>
                 <span>Role</span>
             </button>
             <button class="menu-item" id="settingsMenuBtn">
-                <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
-                </svg>
+                <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
                 <span>Settings</span>
             </button>
         </nav>
@@ -114,17 +101,9 @@
     <div class="modal" id="userDetailModal">
         <div class="modal-content user-detail-modal">
             <h3 id="modalUsername" class="modal-username"></h3>
-            <div class="reports-section">
-                <div class="section-label">📋 Reports</div>
-                <div id="modalReportsList" class="reports-list-small"></div>
-            </div>
-            <div class="admin-actions">
-                <button id="banUserBtn" class="admin-btn ban-btn">🚫 Ban User</button>
-                <button id="suspendUserBtn" class="admin-btn suspend-btn">⏸ Suspend User</button>
-            </div>
-            <div class="modal-buttons">
-                <button id="closeUserDetailBtn" class="close-btn">Close</button>
-            </div>
+            <div class="reports-section"><div class="section-label">📋 Reports</div><div id="modalReportsList" class="reports-list-small"></div></div>
+            <div class="admin-actions"><button id="banUserBtn" class="admin-btn ban-btn">🚫 Ban User</button><button id="suspendUserBtn" class="admin-btn suspend-btn">⏸ Suspend User</button></div>
+            <div class="modal-buttons"><button id="closeUserDetailBtn" class="close-btn">Close</button></div>
         </div>
     </div>
 
@@ -133,14 +112,8 @@
         <div class="modal-content confirm-modal">
             <h3>Confirm Ban</h3>
             <p id="banConfirmUsername"></p>
-            <div class="reports-section">
-                <div class="section-label">Reports against this user:</div>
-                <div id="banReportsList" class="reports-list-small"></div>
-            </div>
-            <div class="modal-buttons">
-                <button id="confirmBanBtn" class="danger-btn">Confirm Ban</button>
-                <button id="cancelBanBtn" class="cancel-btn">Cancel</button>
-            </div>
+            <div class="reports-section"><div class="section-label">Reports against this user:</div><div id="banReportsList" class="reports-list-small"></div></div>
+            <div class="modal-buttons"><button id="confirmBanBtn" class="danger-btn">Confirm Ban</button><button id="cancelBanBtn" class="cancel-btn">Cancel</button></div>
         </div>
     </div>
 
@@ -149,18 +122,9 @@
         <div class="modal-content confirm-modal">
             <h3>Suspend User</h3>
             <p id="suspendConfirmUsername"></p>
-            <div class="reports-section">
-                <div class="section-label">Reports against this user:</div>
-                <div id="suspendReportsList" class="reports-list-small"></div>
-            </div>
-            <div class="suspend-duration">
-                <label>Suspend Duration (hours):</label>
-                <input type="number" id="suspendHours" min="1" max="720" value="24">
-            </div>
-            <div class="modal-buttons">
-                <button id="confirmSuspendBtn" class="danger-btn">Confirm Suspend</button>
-                <button id="cancelSuspendBtn" class="cancel-btn">Cancel</button>
-            </div>
+            <div class="reports-section"><div class="section-label">Reports against this user:</div><div id="suspendReportsList" class="reports-list-small"></div></div>
+            <div class="suspend-duration"><label>Suspend Duration (hours):</label><input type="number" id="suspendHours" min="1" max="720" value="24"></div>
+            <div class="modal-buttons"><button id="confirmSuspendBtn" class="danger-btn">Confirm Suspend</button><button id="cancelSuspendBtn" class="cancel-btn">Cancel</button></div>
         </div>
     </div>
 

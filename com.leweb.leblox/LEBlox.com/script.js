@@ -36,6 +36,17 @@ window.addEventListener('online', () => { if (loadingScreen.style.display !== 'n
 window.addEventListener('offline', () => { if (loadingScreen.style.display !== 'none') showOfflineMode(); });
 startLoadingCheck();
 
+// Connect to Account Role Network
+if (typeof AccountRoleNetwork !== 'undefined') {
+    console.log('Connected to Account Role Network');
+    AccountRoleNetwork.on('suspendedUpdated', function() {
+        if (currentUser && AccountRoleNetwork.isSuspended(currentUser.username)) {
+            logout();
+            alert('Your account has been suspended by an admin.');
+        }
+    });
+}
+
 // ==================== ACCOUNT SYSTEM ====================
 let currentUser = null;
 let users = [];
@@ -43,6 +54,27 @@ let users = [];
 const STORAGE_USERS = 'leblox_users';
 const STORAGE_CURRENT = 'leblox_currentUser';
 const STORAGE_NEXT_ID = 'leblox_nextId';
+const STORAGE_REPORTS = 'leblox_reports';
+const STORAGE_SUSPENDED = 'leblox_suspended';
+
+const ROLE_OWNER = 'owner';
+const ROLE_ADMIN = 'admin';
+const ROLE_MEMBER = 'member';
+
+function addReport(reportedUser, reason) {
+    let reports = JSON.parse(localStorage.getItem(STORAGE_REPORTS) || '[]');
+    reports.push({
+        reportedUser: reportedUser,
+        reporter: currentUser.username,
+        reason: reason,
+        timestamp: Date.now()
+    });
+    localStorage.setItem(STORAGE_REPORTS, JSON.stringify(reports));
+    alert('Report sent to admin.');
+    if (typeof AccountRoleNetwork !== 'undefined') {
+        AccountRoleNetwork.addReport({ reportedUser, reporter: currentUser.username, reason });
+    }
+}
 
 function loadUsers() {
     const stored = localStorage.getItem(STORAGE_USERS);
@@ -53,10 +85,9 @@ function loadUsers() {
         nextId = 1;
         localStorage.setItem(STORAGE_NEXT_ID, nextId);
     }
-    // Seed test accounts
     const testAccounts = [
-        { username: 'LEOwner', password: 'LEOwner@2011', avatar: '👑' },
-        { username: 'LETester', password: 'LETester@2024', avatar: '🧪' }
+        { username: 'LEOwner', password: 'LEOwner@2011', avatar: '👑', role: ROLE_OWNER },
+        { username: 'LETester', password: 'LETester@2024', avatar: '🧪', role: ROLE_ADMIN }
     ];
     for (let acc of testAccounts) {
         if (!users.find(u => u.username === acc.username)) {
@@ -73,12 +104,12 @@ function loadUsers() {
                 receivedRequests: [],
                 description: "",
                 avatar: acc.avatar,
-                privacy: { userId: "everyone", friendsList: "everyone" }
+                privacy: { userId: "everyone", friendsList: "everyone" },
+                role: acc.role
             });
             localStorage.setItem(STORAGE_NEXT_ID, newId + 1);
         }
     }
-    // Ensure all users have required fields
     users.forEach(u => {
         if (!u.friends) u.friends = [];
         if (!u.sentRequests) u.sentRequests = [];
@@ -86,6 +117,7 @@ function loadUsers() {
         if (!u.description) u.description = "";
         if (!u.avatar) u.avatar = "👤";
         if (!u.privacy) u.privacy = { userId: "everyone", friendsList: "everyone" };
+        if (!u.role) u.role = ROLE_MEMBER;
     });
     saveUsers();
 }
@@ -109,13 +141,61 @@ function register(username, password) {
         username, password, displayName: username, userId, createdAt: Date.now(),
         friends: [], sentRequests: [], receivedRequests: [],
         description: "", avatar: "👤",
-        privacy: { userId: "everyone", friendsList: "everyone" }
+        privacy: { userId: "everyone", friendsList: "everyone" },
+        role: ROLE_MEMBER
     };
     users.push(newUser);
     saveUsers();
     return { success: true, user: newUser };
 }
+
+function getRoleBadge(role) {
+    if (role === ROLE_OWNER) return '<span class="role-badge owner">👑 Owner</span>';
+    if (role === ROLE_ADMIN) return '<span class="role-badge admin">⚙️ Admin</span>';
+    return '<span class="role-badge member">👤 Member</span>';
+}
+
+let suspendedModal = null;
+
+function showSuspendedModal(username, remainingMs) {
+    if (suspendedModal) suspendedModal.remove();
+    const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+    suspendedModal = document.createElement('div');
+    suspendedModal.className = 'modal active';
+    suspendedModal.innerHTML = `
+        <div class="modal-content suspended-modal">
+            <div class="suspended-icon">⛔</div>
+            <h3>Your account is suspended</h3>
+            <div class="suspended-timer">
+                <span class="timer-label">Time remaining:</span>
+                <span class="timer-value">${hours}h ${minutes}m</span>
+            </div>
+            <p>Please wait until the suspension ends.</p>
+            <div class="modal-buttons">
+                <button id="suspendedLogoutBtn" class="logout-suspend-btn">Log out</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(suspendedModal);
+    document.getElementById('suspendedLogoutBtn').onclick = () => {
+        suspendedModal.remove();
+        suspendedModal = null;
+        closeModal(loginModal);
+    };
+}
+
 function login(username, password) {
+    const suspended = JSON.parse(localStorage.getItem(STORAGE_SUSPENDED) || '{}');
+    if (suspended[username] && suspended[username] > Date.now()) {
+        const remainingMs = suspended[username] - Date.now();
+        showSuspendedModal(username, remainingMs);
+        return { success: false, msgKey: 'suspended' };
+    }
+    if (suspended[username] && suspended[username] <= Date.now()) {
+        delete suspended[username];
+        localStorage.setItem(STORAGE_SUSPENDED, JSON.stringify(suspended));
+    }
     const user = users.find(u => u.username === username && u.password === password);
     if (!user) return { success: false, msgKey: 'loginError' };
     return { success: true, user };
@@ -222,11 +302,15 @@ function updateFriendsListUI() {
     if (!currentUser.friends.length) {
         container.innerHTML = `<div class="empty-placeholder" data-i18n="noFriends">No friends yet</div>`;
     } else {
-        container.innerHTML = currentUser.friends.map(friend => `
-            <div class="friend-item clickable" data-username="${escapeHtml(friend)}">
-                <span class="friend-username">${escapeHtml(friend)}</span>
-            </div>
-        `).join('');
+        container.innerHTML = currentUser.friends.map(friend => {
+            const friendUser = users.find(u => u.username === friend);
+            const roleBadge = friendUser ? getRoleBadge(friendUser.role) : '';
+            return `
+                <div class="friend-item clickable" data-username="${escapeHtml(friend)}">
+                    <span class="friend-username">${escapeHtml(friend)} ${roleBadge}</span>
+                </div>
+            `;
+        }).join('');
         document.querySelectorAll('#friendsList .friend-item').forEach(item => {
             const username = item.getAttribute('data-username');
             item.addEventListener('click', () => {
@@ -290,7 +374,6 @@ function applyLanguageOnlyText() {
         const key = el.getAttribute('data-i18n-placeholder');
         if (t[key]) el.placeholder = t[key];
     });
-    // Update dynamic placeholders
     const noRequestsDiv = document.querySelector('#friendRequestsList .empty-placeholder');
     if (noRequestsDiv && t.noRequests) noRequestsDiv.textContent = t.noRequests;
     const noFriendsDiv = document.querySelector('#friendsList .empty-placeholder');
@@ -353,7 +436,6 @@ document.getElementById('savePrivacyBtn').onclick = () => {
     closeModal(privacyModal);
 };
 
-// Register
 document.getElementById('registerSubmitBtn').onclick = () => {
     const username = document.getElementById('regUsername').value.trim();
     const password = document.getElementById('regPassword').value;
@@ -369,7 +451,6 @@ document.getElementById('registerSubmitBtn').onclick = () => {
     }
 };
 
-// Login
 document.getElementById('loginSubmitBtn').onclick = () => {
     const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
@@ -386,6 +467,8 @@ document.getElementById('loginSubmitBtn').onclick = () => {
         updateFriendRequestsUI();
         updateFriendsListUI();
         document.getElementById('loginError').innerHTML = '';
+    } else if (res.msgKey === 'suspended') {
+        document.getElementById('loginError').innerHTML = '';
     } else {
         const t = translations[currentLang];
         document.getElementById('loginError').innerHTML = `${t.loginError}<br><button id="loginErrorRegisterBtn" style="margin-top:8px; background:#3b82f6; border:none; padding:6px 16px; border-radius:30px; color:white; cursor:pointer;">${t.registerNow}</button>`;
@@ -394,7 +477,6 @@ document.getElementById('loginSubmitBtn').onclick = () => {
     }
 };
 
-// Change Password
 document.getElementById('changePwdSubmitBtn').onclick = () => {
     const oldPwd = document.getElementById('oldPassword').value;
     const newPwd = document.getElementById('newPassword').value;
@@ -425,13 +507,11 @@ document.getElementById('changePwdSubmitBtn').onclick = () => {
     }
 };
 
-// Show Password
 document.getElementById('showPasswordBtn').onclick = () => {
     document.getElementById('showPasswordValue').innerText = currentUser.password;
     openModal(showPwdModal);
 };
 
-// Logout
 document.getElementById('logoutBtn').onclick = () => { logout(); };
 
 // ==================== PROFILE UI ====================
@@ -451,7 +531,6 @@ function updateProfileInfoUI() {
     document.getElementById('avatarLargePreview').innerText = currentUser.avatar;
 }
 
-// Avatar change
 const avatarOptions = ['👤', '😀', '😎', '🐱', '🐶', '🦊', '🐼', '⭐', '❤️', '🔥', '👍', '🎮'];
 document.getElementById('changeAvatarBtn').onclick = () => {
     let pickerHtml = `<div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center;">`;
@@ -476,7 +555,6 @@ document.getElementById('changeAvatarBtn').onclick = () => {
     modal.querySelector('#cancelAvatarBtn').onclick = () => modal.remove();
 };
 
-// Description edit/clear
 document.getElementById('editDescriptionBtn').onclick = () => {
     const newDesc = prompt('Enter your description (max 200 characters):', currentUser.description);
     if (newDesc !== null && newDesc.length <= 200) {
@@ -516,7 +594,6 @@ document.getElementById('profileSettingsBtn').onclick = () => {
     openModal(privacyModal);
 };
 
-// Profile/Avatar tabs
 const profileInfoBtn = document.getElementById('profileInfoBtn');
 const avatarInfoBtn = document.getElementById('avatarInfoBtn');
 const profileInfoPanel = document.getElementById('profileInfoPanel');
@@ -534,7 +611,6 @@ avatarInfoBtn.onclick = () => {
     avatarPanel.classList.remove('hidden');
 };
 
-// Closet/Shop tabs
 const closetTabBtn = document.getElementById('closetTabBtn');
 const shopTabBtn = document.getElementById('shopTabBtn');
 const closetPanel = document.getElementById('closetPanel');
@@ -611,7 +687,7 @@ function updateExploreResults() {
         }
         const usersHtml = filteredUsers.map(user => `
             <div class="user-list-item clickable" data-username="${escapeHtml(user.username)}">
-                <span class="user-list-username">${escapeHtml(user.displayName)} (${escapeHtml(user.username)})</span>
+                <span class="user-list-username">${escapeHtml(user.displayName)} (${escapeHtml(user.username)}) ${getRoleBadge(user.role)}</span>
             </div>
         `).join('');
         const gamesHtml = `<div class="user-list-item">🎮 Sample Game - Tester Only</div><div class="user-list-item">🕹️ Another Game - Coming Soon</div>`;
@@ -655,8 +731,13 @@ function updateExploreResults() {
             }
             return `
                 <div class="user-list-item clickable" data-username="${escapeHtml(user.username)}">
-                    <span class="user-list-username">${escapeHtml(user.displayName)} (${escapeHtml(user.username)})</span>
-                    <button class="friend-action-btn ${extraClass}" data-username="${escapeHtml(user.username)}" ${disabled ? 'disabled' : ''}>${buttonText}</button>
+                    <div>
+                        <span class="user-list-username">${escapeHtml(user.displayName)} (${escapeHtml(user.username)}) ${getRoleBadge(user.role)}</span>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="friend-action-btn ${extraClass}" data-username="${escapeHtml(user.username)}" ${disabled ? 'disabled' : ''}>${buttonText}</button>
+                        <button class="report-user-btn" data-username="${escapeHtml(user.username)}">🚩 Report</button>
+                    </div>
                 </div>
             `;
         }).join('');
@@ -672,6 +753,16 @@ function updateExploreResults() {
             btn.onclick = (e) => {
                 e.stopPropagation();
                 sendFriendRequest(btn.getAttribute('data-username'));
+            };
+        });
+        document.querySelectorAll('.report-user-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const reportedUsername = btn.getAttribute('data-username');
+                const reason = prompt(`Why are you reporting ${reportedUsername}?`, "Spam, harassment, etc.");
+                if (reason && reason.trim()) {
+                    addReport(reportedUsername, reason);
+                }
             };
         });
         applyLanguageOnlyText();
@@ -692,7 +783,6 @@ filterBtns.forEach(btn => {
 searchBtn.addEventListener('click', updateExploreResults);
 searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') updateExploreResults(); });
 
-// Chat categories
 const catCards = document.querySelectorAll('.category-card');
 catCards.forEach(card => {
     card.onclick = () => {
@@ -702,7 +792,6 @@ catCards.forEach(card => {
     };
 });
 
-// Theme
 const whiteThemeBtn = document.getElementById('whiteThemeBtn');
 const blackThemeBtn = document.getElementById('blackThemeBtn');
 function applyTheme(theme) {
@@ -715,7 +804,6 @@ applyTheme(savedTheme === 'light' ? 'light' : 'dark');
 whiteThemeBtn.onclick = () => applyTheme('light');
 blackThemeBtn.onclick = () => applyTheme('dark');
 
-// Language
 const langSelect = document.getElementById('languageSelect');
 function loadSavedLanguage() {
     const saved = localStorage.getItem('leblox_lang');
@@ -743,6 +831,7 @@ function loadMainApp() {
 }
 
 function escapeHtml(str) {
+    if (!str) return '';
     return str.replace(/[&<>]/g, function(m) {
         if (m === '&') return '&amp;';
         if (m === '<') return '&lt;';

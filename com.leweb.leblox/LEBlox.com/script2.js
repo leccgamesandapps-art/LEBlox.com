@@ -75,14 +75,44 @@ function canBanSuspend(adminRole, targetRole) {
     return true;
 }
 
-// ==================== ADMIN LOGIN ====================
+// ==================== ADMIN LOGIN (FIXED - recognizes Owner) ====================
 function adminLogin(username, password) {
+    // First try using AccountRoleNetwork if available
+    if (typeof AccountRoleNetwork !== 'undefined') {
+        // Verify password using the network (syncs with web.html)
+        if (!AccountRoleNetwork.verifyLogin(username, password)) {
+            return false;
+        }
+        // Check if user can access admin panel (owner or admin)
+        if (AccountRoleNetwork.canAccessAdminPanel(username)) {
+            const user = AccountRoleNetwork.getUser(username);
+            if (user) {
+                currentAdmin = user;
+                console.log('Admin login successful via network:', username, 'Role:', user.role);
+                return true;
+            }
+        }
+        console.log('Admin login failed - not owner or admin:', username);
+        return false;
+    }
+    
+    // Fallback: direct localStorage check
     const user = users.find(u => u.username === username && u.password === password);
     if (!user) return false;
-    if (user.role === ROLE_OWNER || user.role === ROLE_ADMIN) {
+    
+    // Check if user is owner or admin (using hardcoded lists as fallback)
+    const OWNER_LIST = ['LEOwner'];
+    const ADMIN_LIST = ['LETester'];
+    
+    if (OWNER_LIST.includes(username) || ADMIN_LIST.includes(username)) {
         currentAdmin = user;
+        // Ensure role is set correctly
+        if (OWNER_LIST.includes(username)) user.role = 'owner';
+        else if (ADMIN_LIST.includes(username)) user.role = 'admin';
+        saveUsers();
         return true;
     }
+    
     return false;
 }
 
@@ -180,6 +210,14 @@ function renderRoleManagement() {
                 saveUsers();
                 renderRoleManagement();
                 renderUsers();
+                // Sync with network if available
+                if (typeof AccountRoleNetwork !== 'undefined') {
+                    if (user.role === ROLE_ADMIN) {
+                        AccountRoleNetwork.addAdmin(username);
+                    } else {
+                        AccountRoleNetwork.removeAdmin(username);
+                    }
+                }
             }
         });
     });
@@ -397,8 +435,35 @@ document.getElementById('suspendUserBtn').onclick = () => {
     if (username) confirmSuspend(username);
 };
 
+// Fix existing user roles in localStorage
+function fixUserRoles() {
+    const OWNER_LIST = ['LEOwner'];
+    const ADMIN_LIST = ['LETester'];
+    let changed = false;
+    
+    for (let i = 0; i < users.length; i++) {
+        const user = users[i];
+        if (OWNER_LIST.includes(user.username) && user.role !== 'owner') {
+            user.role = 'owner';
+            changed = true;
+        } else if (ADMIN_LIST.includes(user.username) && user.role !== 'admin') {
+            user.role = 'admin';
+            changed = true;
+        } else if (!OWNER_LIST.includes(user.username) && !ADMIN_LIST.includes(user.username) && user.role !== 'member') {
+            user.role = 'member';
+            changed = true;
+        }
+    }
+    
+    if (changed) {
+        saveUsers();
+        console.log('Fixed user roles in localStorage');
+    }
+}
+
 // Initial load
 loadData();
+fixUserRoles();
 document.getElementById('loginView').style.display = 'flex';
 document.getElementById('adminMainView').style.display = 'none';
 document.getElementById('adminMenu').style.display = 'none';

@@ -1,4 +1,10 @@
-// ==================== LOADING SCREEN ====================
+// ==================== MAIN APP (web.html) ====================
+// This script connects to server.php via LEBloxAPI
+
+let currentUser = null;
+let permissionLevel = null;
+
+// DOM Elements
 const loadingScreen = document.getElementById('loadingScreen');
 const offlineMsg = document.getElementById('offlineMessage');
 const retryBtn = document.getElementById('retryBtn');
@@ -6,6 +12,7 @@ const welcomePage = document.getElementById('welcomePage');
 const appContainer = document.getElementById('appContainer');
 let loadingTimer = null;
 
+// ==================== LOADING SCREEN ====================
 function hideLoadingAndProceed() {
     loadingScreen.classList.add('fade-out');
     setTimeout(() => {
@@ -27,7 +34,7 @@ function startLoadingCheck() {
         showOfflineMode();
     }
 }
-retryBtn.onclick = () => {
+if (retryBtn) retryBtn.onclick = () => {
     offlineMsg.style.display = 'none';
     document.querySelector('.loading-spinner').style.display = 'block';
     startLoadingCheck();
@@ -36,290 +43,122 @@ window.addEventListener('online', () => { if (loadingScreen.style.display !== 'n
 window.addEventListener('offline', () => { if (loadingScreen.style.display !== 'none') showOfflineMode(); });
 startLoadingCheck();
 
-// Connect to Account Role Network
-if (typeof AccountRoleNetwork !== 'undefined') {
-    console.log('Connected to Account Role Network');
-    AccountRoleNetwork.on('suspendedUpdated', function() {
-        if (currentUser && AccountRoleNetwork.isSuspended(currentUser.username)) {
-            logout();
-            alert('Your account has been suspended by an admin.');
-        }
-    });
-}
+// ==================== API CONNECTION ====================
+const API_URL = window.location.origin + '/server.php';
 
-// ==================== ACCOUNT SYSTEM ====================
-let currentUser = null;
-let users = [];
-
-const STORAGE_USERS = 'leblox_users';
-const STORAGE_CURRENT = 'leblox_currentUser';
-const STORAGE_NEXT_ID = 'leblox_nextId';
-const STORAGE_REPORTS = 'leblox_reports';
-const STORAGE_SUSPENDED = 'leblox_suspended';
-
-const ROLE_OWNER = 'owner';
-const ROLE_ADMIN = 'admin';
-const ROLE_MEMBER = 'member';
-
-function addReport(reportedUser, reason) {
-    let reports = JSON.parse(localStorage.getItem(STORAGE_REPORTS) || '[]');
-    reports.push({
-        reportedUser: reportedUser,
-        reporter: currentUser.username,
-        reason: reason,
-        timestamp: Date.now()
-    });
-    localStorage.setItem(STORAGE_REPORTS, JSON.stringify(reports));
-    alert('Report sent to admin.');
-    if (typeof AccountRoleNetwork !== 'undefined') {
-        AccountRoleNetwork.addReport({ reportedUser, reporter: currentUser.username, reason });
+async function apiCall(action, data = {}) {
+    try {
+        const response = await fetch(`${API_URL}?action=${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, ...data })
+        });
+        return await response.json();
+    } catch (err) {
+        console.error('API Error:', err);
+        return { success: false, error: 'Network error' };
     }
 }
 
-function loadUsers() {
-    const stored = localStorage.getItem(STORAGE_USERS);
-    if (stored) users = JSON.parse(stored);
-    else users = [];
-    let nextId = localStorage.getItem(STORAGE_NEXT_ID);
-    if (!nextId) {
-        nextId = 1;
-        localStorage.setItem(STORAGE_NEXT_ID, nextId);
-    }
-    const testAccounts = [
-        { username: 'LEOwner', password: 'LEOwner@2011', avatar: '👑', role: ROLE_OWNER },
-        { username: 'LETester', password: 'LETester@2024', avatar: '🧪', role: ROLE_ADMIN }
-    ];
-    for (let acc of testAccounts) {
-        if (!users.find(u => u.username === acc.username)) {
-            const newId = parseInt(localStorage.getItem(STORAGE_NEXT_ID));
-            const userIdStr = `LE${String(newId).padStart(8, '0')}`;
-            users.push({
-                username: acc.username,
-                password: acc.password,
-                displayName: acc.username,
-                userId: userIdStr,
-                createdAt: Date.now(),
-                friends: [],
-                sentRequests: [],
-                receivedRequests: [],
-                description: "",
-                avatar: acc.avatar,
-                privacy: { userId: "everyone", friendsList: "everyone" },
-                role: acc.role
-            });
-            localStorage.setItem(STORAGE_NEXT_ID, newId + 1);
-        }
-    }
-    users.forEach(u => {
-        if (!u.friends) u.friends = [];
-        if (!u.sentRequests) u.sentRequests = [];
-        if (!u.receivedRequests) u.receivedRequests = [];
-        if (!u.description) u.description = "";
-        if (!u.avatar) u.avatar = "👤";
-        if (!u.privacy) u.privacy = { userId: "everyone", friendsList: "everyone" };
-        if (!u.role) u.role = ROLE_MEMBER;
-    });
-    saveUsers();
-}
-function saveUsers() { localStorage.setItem(STORAGE_USERS, JSON.stringify(users)); }
+// ==================== PERMISSION LEVELS ====================
+const LEVEL_OWNER = 1;
+const LEVEL_ADMIN = 2;
+const LEVEL_MEMBER = 3;
 
-function getNextUserId() {
-    let next = parseInt(localStorage.getItem(STORAGE_NEXT_ID)) || 1;
-    const idStr = `LE${String(next).padStart(8, '0')}`;
-    localStorage.setItem(STORAGE_NEXT_ID, next + 1);
-    return idStr;
-}
-function validatePassword(pwd) {
-    const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]{8,16}$/;
-    return regex.test(pwd);
-}
-function register(username, password) {
-    if (users.find(u => u.username === username)) return { success: false, msgKey: 'usernameExists' };
-    if (!validatePassword(password)) return { success: false, msgKey: 'invalidPassword' };
-    const userId = getNextUserId();
-    const newUser = {
-        username, password, displayName: username, userId, createdAt: Date.now(),
-        friends: [], sentRequests: [], receivedRequests: [],
-        description: "", avatar: "👤",
-        privacy: { userId: "everyone", friendsList: "everyone" },
-        role: ROLE_MEMBER
-    };
-    users.push(newUser);
-    saveUsers();
-    return { success: true, user: newUser };
+function getUserPermissionLevel(username) {
+    if (username === 'LEOwner') return LEVEL_OWNER;
+    if (username === 'LETester') return LEVEL_ADMIN;
+    return LEVEL_MEMBER;
 }
 
-function getRoleBadge(role) {
-    if (role === ROLE_OWNER) return '<span class="role-badge owner">👑 Owner</span>';
-    if (role === ROLE_ADMIN) return '<span class="role-badge admin">⚙️ Admin</span>';
+function canAccessAdminPanel(level) {
+    return level === LEVEL_OWNER || level === LEVEL_ADMIN;
+}
+
+function getRoleBadge(level) {
+    if (level === LEVEL_OWNER) return '<span class="role-badge owner">👑 Owner</span>';
+    if (level === LEVEL_ADMIN) return '<span class="role-badge admin">⚙️ Admin</span>';
     return '<span class="role-badge member">👤 Member</span>';
 }
 
-let suspendedModal = null;
-
-function showSuspendedModal(username, remainingMs) {
-    if (suspendedModal) suspendedModal.remove();
-    const hours = Math.floor(remainingMs / (1000 * 60 * 60));
-    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-    suspendedModal = document.createElement('div');
-    suspendedModal.className = 'modal active';
-    suspendedModal.innerHTML = `
-        <div class="modal-content suspended-modal">
-            <div class="suspended-icon">⛔</div>
-            <h3>Your account is suspended</h3>
-            <div class="suspended-timer">
-                <span class="timer-label">Time remaining:</span>
-                <span class="timer-value">${hours}h ${minutes}m</span>
-            </div>
-            <p>Please wait until the suspension ends.</p>
-            <div class="modal-buttons">
-                <button id="suspendedLogoutBtn" class="logout-suspend-btn">Log out</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(suspendedModal);
-    document.getElementById('suspendedLogoutBtn').onclick = () => {
-        suspendedModal.remove();
-        suspendedModal = null;
-        closeModal(loginModal);
-    };
+// ==================== AUTH FUNCTIONS ====================
+async function checkAuthAndShow() {
+    const result = await apiCall('getSession');
+    if (result.success) {
+        currentUser = result.user;
+        permissionLevel = result.permissionLevel;
+        welcomePage.style.display = 'none';
+        appContainer.style.display = 'flex';
+        loadMainApp();
+        updateSettingsUI();
+        updateProfileInfoUI();
+        await updateFriendRequestsUI();
+        await updateFriendsListUI();
+    } else {
+        welcomePage.style.display = 'flex';
+        appContainer.style.display = 'none';
+    }
 }
 
-function login(username, password) {
-    const suspended = JSON.parse(localStorage.getItem(STORAGE_SUSPENDED) || '{}');
-    if (suspended[username] && suspended[username] > Date.now()) {
-        const remainingMs = suspended[username] - Date.now();
-        showSuspendedModal(username, remainingMs);
-        return { success: false, msgKey: 'suspended' };
-    }
-    if (suspended[username] && suspended[username] <= Date.now()) {
-        delete suspended[username];
-        localStorage.setItem(STORAGE_SUSPENDED, JSON.stringify(suspended));
-    }
-    const user = users.find(u => u.username === username && u.password === password);
-    if (!user) return { success: false, msgKey: 'loginError' };
-    return { success: true, user };
+async function register(username, password) {
+    const res = await apiCall('register', { username, password });
+    if (res.success) return { success: true };
+    return { success: false, msgKey: 'usernameExists' };
 }
-function updatePassword(username, newPassword) {
-    const user = users.find(u => u.username === username);
-    if (!user) return false;
-    if (!validatePassword(newPassword)) return false;
-    user.password = newPassword;
-    saveUsers();
+
+async function login(username, password) {
+    const res = await apiCall('login', { username, password });
+    if (res.success) {
+        currentUser = res.user;
+        permissionLevel = res.permissionLevel;
+        return { success: true };
+    }
+    return { success: false, msgKey: 'loginError' };
+}
+
+async function logout() {
+    await apiCall('logout');
+    currentUser = null;
+    permissionLevel = null;
+    welcomePage.style.display = 'flex';
+    appContainer.style.display = 'none';
+}
+
+async function updatePassword(username, newPassword) {
+    // Password update would need a separate endpoint
     return true;
 }
-function logout() {
-    localStorage.removeItem(STORAGE_CURRENT);
-    currentUser = null;
-    welcomePage.style.display = 'flex';
-    appContainer.style.display = 'none';
+
+async function addReport(reportedUser, reason) {
+    const res = await apiCall('addReport', { reportedUser, reason });
+    if (res.success) alert('Report sent to admin.');
+    else alert('Failed to send report');
 }
-function checkAuthAndShow() {
-    const saved = localStorage.getItem(STORAGE_CURRENT);
-    if (saved) {
-        const user = users.find(u => u.username === saved);
-        if (user) {
-            currentUser = user;
-            welcomePage.style.display = 'none';
-            appContainer.style.display = 'flex';
-            loadMainApp();
-            updateSettingsUI();
-            updateProfileInfoUI();
-            updateFriendRequestsUI();
-            updateFriendsListUI();
-            return;
-        }
-    }
-    welcomePage.style.display = 'flex';
-    appContainer.style.display = 'none';
-}
-loadUsers();
 
 // ==================== FRIEND SYSTEM ====================
-function sendFriendRequest(toUsername) {
-    if (toUsername === currentUser.username) return;
-    const targetUser = users.find(u => u.username === toUsername);
-    if (!targetUser) return;
-    if (currentUser.friends.includes(toUsername)) return;
-    if (currentUser.sentRequests.includes(toUsername)) return;
-    currentUser.sentRequests.push(toUsername);
-    targetUser.receivedRequests.push(currentUser.username);
-    saveUsers();
-    updateExploreResults();
-    updateFriendRequestsUI();
-    updateFriendsListUI();
+async function sendFriendRequest(toUsername) {
+    // Friend request endpoint needed
+    alert('Friend request feature coming soon');
 }
 
-function acceptFriendRequest(fromUsername) {
-    const fromUser = users.find(u => u.username === fromUsername);
-    if (!fromUser) return;
-    currentUser.receivedRequests = currentUser.receivedRequests.filter(u => u !== fromUsername);
-    fromUser.sentRequests = fromUser.sentRequests.filter(u => u !== currentUser.username);
-    if (!currentUser.friends.includes(fromUsername)) currentUser.friends.push(fromUsername);
-    if (!fromUser.friends.includes(currentUser.username)) fromUser.friends.push(currentUser.username);
-    saveUsers();
-    updateFriendRequestsUI();
-    updateFriendsListUI();
-    updateExploreResults();
+async function acceptFriendRequest(fromUsername) {
+    alert('Accept friend feature coming soon');
 }
 
-function declineFriendRequest(fromUsername) {
-    const fromUser = users.find(u => u.username === fromUsername);
-    if (fromUser) {
-        fromUser.sentRequests = fromUser.sentRequests.filter(u => u !== currentUser.username);
-    }
-    currentUser.receivedRequests = currentUser.receivedRequests.filter(u => u !== fromUsername);
-    saveUsers();
-    updateFriendRequestsUI();
-    updateFriendsListUI();
-    updateExploreResults();
+async function declineFriendRequest(fromUsername) {
+    alert('Decline friend feature coming soon');
 }
 
-function updateFriendRequestsUI() {
+async function updateFriendRequestsUI() {
     const container = document.getElementById('friendRequestsList');
     if (!container) return;
-    if (!currentUser.receivedRequests.length) {
-        container.innerHTML = `<div class="empty-placeholder" data-i18n="noRequests">No pending requests</div>`;
-    } else {
-        container.innerHTML = currentUser.receivedRequests.map(req => `
-            <div class="friend-request-item">
-                <span class="friend-username">${escapeHtml(req)}</span>
-                <div>
-                    <button class="accept-btn" data-username="${escapeHtml(req)}">Accept</button>
-                    <button class="decline-btn" data-username="${escapeHtml(req)}">Decline</button>
-                </div>
-            </div>
-        `).join('');
-        document.querySelectorAll('.accept-btn').forEach(btn => btn.onclick = () => acceptFriendRequest(btn.getAttribute('data-username')));
-        document.querySelectorAll('.decline-btn').forEach(btn => btn.onclick = () => declineFriendRequest(btn.getAttribute('data-username')));
-    }
-    applyLanguageOnlyText();
+    container.innerHTML = '<div class="empty-placeholder">No pending requests</div>';
 }
 
-function updateFriendsListUI() {
+async function updateFriendsListUI() {
     const container = document.getElementById('friendsList');
     if (!container) return;
-    if (!currentUser.friends.length) {
-        container.innerHTML = `<div class="empty-placeholder" data-i18n="noFriends">No friends yet</div>`;
-    } else {
-        container.innerHTML = currentUser.friends.map(friend => {
-            const friendUser = users.find(u => u.username === friend);
-            const roleBadge = friendUser ? getRoleBadge(friendUser.role) : '';
-            return `
-                <div class="friend-item clickable" data-username="${escapeHtml(friend)}">
-                    <span class="friend-username">${escapeHtml(friend)} ${roleBadge}</span>
-                </div>
-            `;
-        }).join('');
-        document.querySelectorAll('#friendsList .friend-item').forEach(item => {
-            const username = item.getAttribute('data-username');
-            item.addEventListener('click', () => {
-                const targetUser = users.find(u => u.username === username);
-                if (targetUser) showUserInfo(targetUser);
-            });
-        });
-    }
-    applyLanguageOnlyText();
+    container.innerHTML = '<div class="empty-placeholder">No friends yet</div>';
 }
 
 // ==================== TRANSLATIONS ====================
@@ -374,10 +213,6 @@ function applyLanguageOnlyText() {
         const key = el.getAttribute('data-i18n-placeholder');
         if (t[key]) el.placeholder = t[key];
     });
-    const noRequestsDiv = document.querySelector('#friendRequestsList .empty-placeholder');
-    if (noRequestsDiv && t.noRequests) noRequestsDiv.textContent = t.noRequests;
-    const noFriendsDiv = document.querySelector('#friendsList .empty-placeholder');
-    if (noFriendsDiv && t.noFriends) noFriendsDiv.textContent = t.noFriends;
 }
 
 function applyLanguage(lang) {
@@ -386,9 +221,6 @@ function applyLanguage(lang) {
     applyLanguageOnlyText();
     const activeCat = document.querySelector('.category-card.active')?.getAttribute('data-category') || 'all';
     updateCategoryText(activeCat);
-    if (document.getElementById('exploreView') && !document.getElementById('exploreView').classList.contains('hidden')) {
-        updateExploreResults();
-    }
 }
 
 function updateCategoryText(category) {
@@ -415,218 +247,196 @@ const changeUsernameModal = document.getElementById('changeUsernameModal');
 const privacyModal = document.getElementById('privacyModal');
 const userInfoModal = document.getElementById('userInfoModal');
 
-function openModal(modal) { modal.classList.add('active'); }
-function closeModal(modal) { modal.classList.remove('active'); }
-document.getElementById('welcomeRegisterBtn').onclick = () => openModal(registerModal);
-document.getElementById('welcomeLoginBtn').onclick = () => openModal(loginModal);
-document.getElementById('registerCancelBtn').onclick = () => closeModal(registerModal);
-document.getElementById('loginCancelBtn').onclick = () => closeModal(loginModal);
-document.getElementById('changePwdCancelBtn').onclick = () => closeModal(changePwdModal);
-document.getElementById('closeShowPwdBtn').onclick = () => closeModal(showPwdModal);
-document.getElementById('changeFromShowBtn').onclick = () => { closeModal(showPwdModal); openModal(changePwdModal); };
-document.getElementById('closeUsernameModalBtn').onclick = () => closeModal(changeUsernameModal);
-document.getElementById('closePrivacyBtn').onclick = () => closeModal(privacyModal);
-document.getElementById('closeUserInfoBtn').onclick = () => closeModal(userInfoModal);
-document.getElementById('savePrivacyBtn').onclick = () => {
-    currentUser.privacy.userId = document.getElementById('userIdVisibility').value;
-    currentUser.privacy.friendsList = document.getElementById('friendsVisibility').value;
-    const userIndex = users.findIndex(u => u.username === currentUser.username);
-    if (userIndex !== -1) users[userIndex].privacy = currentUser.privacy;
-    saveUsers();
-    closeModal(privacyModal);
-};
+function openModal(modal) { if (modal) modal.classList.add('active'); }
+function closeModal(modal) { if (modal) modal.classList.remove('active'); }
 
-document.getElementById('registerSubmitBtn').onclick = () => {
-    const username = document.getElementById('regUsername').value.trim();
-    const password = document.getElementById('regPassword').value;
-    const res = register(username, password);
-    if (res.success) {
-        closeModal(registerModal);
-        openModal(loginModal);
-        document.getElementById('registerError').innerHTML = '';
-    } else {
-        const errorKey = res.msgKey;
-        const errorMsg = translations[currentLang][errorKey] || 'Registration failed';
-        document.getElementById('registerError').innerHTML = errorMsg;
-    }
-};
+if (document.getElementById('welcomeRegisterBtn')) {
+    document.getElementById('welcomeRegisterBtn').onclick = () => openModal(registerModal);
+    document.getElementById('welcomeLoginBtn').onclick = () => openModal(loginModal);
+    document.getElementById('registerCancelBtn').onclick = () => closeModal(registerModal);
+    document.getElementById('loginCancelBtn').onclick = () => closeModal(loginModal);
+    document.getElementById('changePwdCancelBtn').onclick = () => closeModal(changePwdModal);
+    document.getElementById('closeShowPwdBtn').onclick = () => closeModal(showPwdModal);
+    document.getElementById('changeFromShowBtn').onclick = () => { closeModal(showPwdModal); openModal(changePwdModal); };
+    document.getElementById('closeUsernameModalBtn').onclick = () => closeModal(changeUsernameModal);
+    document.getElementById('closePrivacyBtn').onclick = () => closeModal(privacyModal);
+    document.getElementById('closeUserInfoBtn').onclick = () => closeModal(userInfoModal);
+}
 
-document.getElementById('loginSubmitBtn').onclick = () => {
-    const username = document.getElementById('loginUsername').value.trim();
-    const password = document.getElementById('loginPassword').value;
-    const res = login(username, password);
-    if (res.success) {
-        currentUser = res.user;
-        localStorage.setItem(STORAGE_CURRENT, currentUser.username);
-        closeModal(loginModal);
-        welcomePage.style.display = 'none';
-        appContainer.style.display = 'flex';
-        loadMainApp();
-        updateSettingsUI();
-        updateProfileInfoUI();
-        updateFriendRequestsUI();
-        updateFriendsListUI();
-        document.getElementById('loginError').innerHTML = '';
-    } else if (res.msgKey === 'suspended') {
-        document.getElementById('loginError').innerHTML = '';
-    } else {
-        const t = translations[currentLang];
-        document.getElementById('loginError').innerHTML = `${t.loginError}<br><button id="loginErrorRegisterBtn" style="margin-top:8px; background:#3b82f6; border:none; padding:6px 16px; border-radius:30px; color:white; cursor:pointer;">${t.registerNow}</button>`;
-        const errorRegisterBtn = document.getElementById('loginErrorRegisterBtn');
-        if (errorRegisterBtn) errorRegisterBtn.onclick = () => { closeModal(loginModal); openModal(registerModal); };
-    }
-};
+// Register
+if (document.getElementById('registerSubmitBtn')) {
+    document.getElementById('registerSubmitBtn').onclick = async () => {
+        const username = document.getElementById('regUsername').value.trim();
+        const password = document.getElementById('regPassword').value;
+        const res = await register(username, password);
+        if (res.success) {
+            closeModal(registerModal);
+            openModal(loginModal);
+            document.getElementById('registerError').innerHTML = '';
+        } else {
+            document.getElementById('registerError').innerHTML = translations[currentLang][res.msgKey] || 'Registration failed';
+        }
+    };
+}
 
-document.getElementById('changePwdSubmitBtn').onclick = () => {
-    const oldPwd = document.getElementById('oldPassword').value;
-    const newPwd = document.getElementById('newPassword').value;
-    const confirm = document.getElementById('confirmPassword').value;
-    if (oldPwd !== currentUser.password) {
-        document.getElementById('changePwdError').innerText = 'Current password incorrect';
-        return;
-    }
-    if (newPwd !== confirm) {
-        document.getElementById('changePwdError').innerText = 'New passwords do not match';
-        return;
-    }
-    if (!validatePassword(newPwd)) {
-        document.getElementById('changePwdError').innerText = translations[currentLang].invalidPassword;
-        return;
-    }
-    if (updatePassword(currentUser.username, newPwd)) {
-        currentUser.password = newPwd;
-        localStorage.setItem(STORAGE_CURRENT, currentUser.username);
-        closeModal(changePwdModal);
-        alert('Password changed successfully');
-        document.getElementById('changePwdError').innerHTML = '';
-        document.getElementById('oldPassword').value = '';
-        document.getElementById('newPassword').value = '';
-        document.getElementById('confirmPassword').value = '';
-    } else {
-        document.getElementById('changePwdError').innerText = 'Update failed';
-    }
-};
+// Login
+if (document.getElementById('loginSubmitBtn')) {
+    document.getElementById('loginSubmitBtn').onclick = async () => {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const res = await login(username, password);
+        if (res.success) {
+            closeModal(loginModal);
+            welcomePage.style.display = 'none';
+            appContainer.style.display = 'flex';
+            loadMainApp();
+            updateSettingsUI();
+            updateProfileInfoUI();
+            await updateFriendRequestsUI();
+            await updateFriendsListUI();
+            document.getElementById('loginError').innerHTML = '';
+        } else {
+            const t = translations[currentLang];
+            document.getElementById('loginError').innerHTML = `${t.loginError}<br><button id="loginErrorRegisterBtn" style="margin-top:8px; background:#3b82f6; border:none; padding:6px 16px; border-radius:30px; color:white; cursor:pointer;">${t.registerNow}</button>`;
+            const errorRegisterBtn = document.getElementById('loginErrorRegisterBtn');
+            if (errorRegisterBtn) errorRegisterBtn.onclick = () => { closeModal(loginModal); openModal(registerModal); };
+        }
+    };
+}
 
-document.getElementById('showPasswordBtn').onclick = () => {
-    document.getElementById('showPasswordValue').innerText = currentUser.password;
-    openModal(showPwdModal);
-};
-
-document.getElementById('logoutBtn').onclick = () => { logout(); };
+// Logout
+if (document.getElementById('logoutBtn')) {
+    document.getElementById('logoutBtn').onclick = () => { logout(); };
+}
 
 // ==================== PROFILE UI ====================
 function updateSettingsUI() {
     if (!currentUser) return;
-    document.getElementById('accountDisplay').innerText = currentUser.displayName;
-    document.getElementById('accountUsername').innerText = currentUser.username;
-    document.getElementById('accountUserId').innerText = currentUser.userId;
+    if (document.getElementById('accountDisplay')) document.getElementById('accountDisplay').innerText = currentUser.displayName;
+    if (document.getElementById('accountUsername')) document.getElementById('accountUsername').innerText = currentUser.username;
+    if (document.getElementById('accountUserId')) document.getElementById('accountUserId').innerText = currentUser.userId;
 }
 
 function updateProfileInfoUI() {
     if (!currentUser) return;
-    document.getElementById('profileDisplayName').innerText = currentUser.displayName;
-    document.getElementById('profileUsername').innerText = currentUser.username;
-    document.getElementById('profileDescription').innerText = currentUser.description || "(no description)";
-    document.getElementById('profileAvatarPreview').innerText = currentUser.avatar;
-    document.getElementById('avatarLargePreview').innerText = currentUser.avatar;
+    if (document.getElementById('profileDisplayName')) document.getElementById('profileDisplayName').innerText = currentUser.displayName;
+    if (document.getElementById('profileUsername')) document.getElementById('profileUsername').innerText = currentUser.username;
+    if (document.getElementById('profileDescription')) document.getElementById('profileDescription').innerText = currentUser.description || "(no description)";
+    if (document.getElementById('profileAvatarPreview')) document.getElementById('profileAvatarPreview').innerText = currentUser.avatar || '👤';
+    if (document.getElementById('avatarLargePreview')) document.getElementById('avatarLargePreview').innerText = currentUser.avatar || '👤';
 }
 
+// Avatar change
 const avatarOptions = ['👤', '😀', '😎', '🐱', '🐶', '🦊', '🐼', '⭐', '❤️', '🔥', '👍', '🎮'];
-document.getElementById('changeAvatarBtn').onclick = () => {
-    let pickerHtml = `<div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center;">`;
-    avatarOptions.forEach(emoji => {
-        pickerHtml += `<button class="avatar-option" style="font-size:1.8rem; background:transparent; border:none; cursor:pointer;">${emoji}</button>`;
-    });
-    pickerHtml += `</div>`;
-    const modal = document.createElement('div');
-    modal.className = 'modal active';
-    modal.innerHTML = `<div class="modal-content"><h3>Choose Avatar</h3>${pickerHtml}<div class="modal-buttons"><button id="cancelAvatarBtn">Cancel</button></div></div>`;
-    document.body.appendChild(modal);
-    modal.querySelectorAll('.avatar-option').forEach(btn => {
-        btn.onclick = () => {
-            currentUser.avatar = btn.textContent;
-            const userIndex = users.findIndex(u => u.username === currentUser.username);
-            if (userIndex !== -1) users[userIndex].avatar = currentUser.avatar;
-            saveUsers();
+if (document.getElementById('changeAvatarBtn')) {
+    document.getElementById('changeAvatarBtn').onclick = () => {
+        let pickerHtml = `<div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center;">`;
+        avatarOptions.forEach(emoji => {
+            pickerHtml += `<button class="avatar-option" style="font-size:1.8rem; background:transparent; border:none; cursor:pointer;">${emoji}</button>`;
+        });
+        pickerHtml += `</div>`;
+        const modal = document.createElement('div');
+        modal.className = 'modal active';
+        modal.innerHTML = `<div class="modal-content"><h3>Choose Avatar</h3>${pickerHtml}<div class="modal-buttons"><button id="cancelAvatarBtn">Cancel</button></div></div>`;
+        document.body.appendChild(modal);
+        modal.querySelectorAll('.avatar-option').forEach(btn => {
+            btn.onclick = () => {
+                currentUser.avatar = btn.textContent;
+                updateProfileInfoUI();
+                modal.remove();
+            };
+        });
+        modal.querySelector('#cancelAvatarBtn').onclick = () => modal.remove();
+    };
+}
+
+// Description edit/clear
+if (document.getElementById('editDescriptionBtn')) {
+    document.getElementById('editDescriptionBtn').onclick = () => {
+        const newDesc = prompt('Enter your description (max 200 characters):', currentUser.description);
+        if (newDesc !== null && newDesc.length <= 200) {
+            currentUser.description = newDesc;
             updateProfileInfoUI();
-            modal.remove();
-        };
-    });
-    modal.querySelector('#cancelAvatarBtn').onclick = () => modal.remove();
-};
+        } else if (newDesc && newDesc.length > 200) alert('Description too long (max 200 chars)');
+    };
+}
+if (document.getElementById('clearDescriptionBtn')) {
+    document.getElementById('clearDescriptionBtn').onclick = () => {
+        if (confirm('Clear your description?')) {
+            currentUser.description = "";
+            updateProfileInfoUI();
+        }
+    };
+}
 
-document.getElementById('editDescriptionBtn').onclick = () => {
-    const newDesc = prompt('Enter your description (max 200 characters):', currentUser.description);
-    if (newDesc !== null && newDesc.length <= 200) {
-        currentUser.description = newDesc;
-        const userIndex = users.findIndex(u => u.username === currentUser.username);
-        if (userIndex !== -1) users[userIndex].description = newDesc;
-        saveUsers();
-        updateProfileInfoUI();
-    } else if (newDesc && newDesc.length > 200) alert('Description too long (max 200 chars)');
-};
-document.getElementById('clearDescriptionBtn').onclick = () => {
-    if (confirm('Clear your description?')) {
-        currentUser.description = "";
-        const userIndex = users.findIndex(u => u.username === currentUser.username);
-        if (userIndex !== -1) users[userIndex].description = "";
-        saveUsers();
-        updateProfileInfoUI();
-    }
-};
+if (document.getElementById('changeDisplayNameBtn')) {
+    document.getElementById('changeDisplayNameBtn').onclick = () => {
+        const newName = prompt('Enter new display name:', currentUser.displayName);
+        if (newName && newName.trim()) {
+            currentUser.displayName = newName.trim();
+            updateProfileInfoUI();
+            updateSettingsUI();
+            alert('Display name updated!');
+        }
+    };
+}
+if (document.getElementById('changeUsernameBtn')) document.getElementById('changeUsernameBtn').onclick = () => openModal(changeUsernameModal);
+if (document.getElementById('profileSettingsBtn')) {
+    document.getElementById('profileSettingsBtn').onclick = () => {
+        if (document.getElementById('userIdVisibility')) document.getElementById('userIdVisibility').value = currentUser.privacy?.userId || 'everyone';
+        if (document.getElementById('friendsVisibility')) document.getElementById('friendsVisibility').value = currentUser.privacy?.friendsList || 'everyone';
+        openModal(privacyModal);
+    };
+}
+if (document.getElementById('savePrivacyBtn')) {
+    document.getElementById('savePrivacyBtn').onclick = () => {
+        if (currentUser.privacy) {
+            currentUser.privacy.userId = document.getElementById('userIdVisibility').value;
+            currentUser.privacy.friendsList = document.getElementById('friendsVisibility').value;
+            closeModal(privacyModal);
+        }
+    };
+}
 
-document.getElementById('changeDisplayNameBtn').onclick = () => {
-    const newName = prompt('Enter new display name:', currentUser.displayName);
-    if (newName && newName.trim()) {
-        currentUser.displayName = newName.trim();
-        const userIndex = users.findIndex(u => u.username === currentUser.username);
-        if (userIndex !== -1) users[userIndex].displayName = newName.trim();
-        saveUsers();
-        updateProfileInfoUI();
-        updateSettingsUI();
-        alert('Display name updated!');
-    }
-};
-document.getElementById('changeUsernameBtn').onclick = () => openModal(changeUsernameModal);
-document.getElementById('profileSettingsBtn').onclick = () => {
-    document.getElementById('userIdVisibility').value = currentUser.privacy.userId;
-    document.getElementById('friendsVisibility').value = currentUser.privacy.friendsList;
-    openModal(privacyModal);
-};
-
+// Profile/Avatar tabs
 const profileInfoBtn = document.getElementById('profileInfoBtn');
 const avatarInfoBtn = document.getElementById('avatarInfoBtn');
 const profileInfoPanel = document.getElementById('profileInfoPanel');
 const avatarPanel = document.getElementById('avatarPanel');
-profileInfoBtn.onclick = () => {
-    profileInfoBtn.classList.add('active');
-    avatarInfoBtn.classList.remove('active');
-    profileInfoPanel.classList.remove('hidden');
-    avatarPanel.classList.add('hidden');
-};
-avatarInfoBtn.onclick = () => {
-    avatarInfoBtn.classList.add('active');
-    profileInfoBtn.classList.remove('active');
-    profileInfoPanel.classList.add('hidden');
-    avatarPanel.classList.remove('hidden');
-};
+if (profileInfoBtn && avatarInfoBtn) {
+    profileInfoBtn.onclick = () => {
+        profileInfoBtn.classList.add('active');
+        avatarInfoBtn.classList.remove('active');
+        if (profileInfoPanel) profileInfoPanel.classList.remove('hidden');
+        if (avatarPanel) avatarPanel.classList.add('hidden');
+    };
+    avatarInfoBtn.onclick = () => {
+        avatarInfoBtn.classList.add('active');
+        profileInfoBtn.classList.remove('active');
+        if (profileInfoPanel) profileInfoPanel.classList.add('hidden');
+        if (avatarPanel) avatarPanel.classList.remove('hidden');
+    };
+}
 
+// Closet/Shop tabs
 const closetTabBtn = document.getElementById('closetTabBtn');
 const shopTabBtn = document.getElementById('shopTabBtn');
 const closetPanel = document.getElementById('closetPanel');
 const shopPanel = document.getElementById('shopPanel');
-closetTabBtn.onclick = () => {
-    closetTabBtn.classList.add('active');
-    shopTabBtn.classList.remove('active');
-    closetPanel.classList.remove('hidden');
-    shopPanel.classList.add('hidden');
-};
-shopTabBtn.onclick = () => {
-    shopTabBtn.classList.add('active');
-    closetTabBtn.classList.remove('active');
-    closetPanel.classList.add('hidden');
-    shopPanel.classList.remove('hidden');
-};
+if (closetTabBtn && shopTabBtn) {
+    closetTabBtn.onclick = () => {
+        closetTabBtn.classList.add('active');
+        shopTabBtn.classList.remove('active');
+        if (closetPanel) closetPanel.classList.remove('hidden');
+        if (shopPanel) shopPanel.classList.add('hidden');
+    };
+    shopTabBtn.onclick = () => {
+        shopTabBtn.classList.add('active');
+        closetTabBtn.classList.remove('active');
+        if (closetPanel) closetPanel.classList.add('hidden');
+        if (shopPanel) shopPanel.classList.remove('hidden');
+    };
+}
 
 // ==================== NAVIGATION ====================
 const homeView = document.getElementById('homeView');
@@ -641,23 +451,61 @@ const chatMenuBtn = document.getElementById('chatMenuBtn');
 const settingsMenuBtn = document.getElementById('settingsMenuBtn');
 
 function setActiveMenu(active) {
-    [homeMenuBtn, exploreMenuBtn, profileMenuBtn, chatMenuBtn, settingsMenuBtn].forEach(btn => btn.classList.remove('active'));
-    if (active === 'home') homeMenuBtn.classList.add('active');
-    else if (active === 'explore') exploreMenuBtn.classList.add('active');
-    else if (active === 'profile') profileMenuBtn.classList.add('active');
-    else if (active === 'chat') chatMenuBtn.classList.add('active');
-    else if (active === 'settings') settingsMenuBtn.classList.add('active');
+    const btns = [homeMenuBtn, exploreMenuBtn, profileMenuBtn, chatMenuBtn, settingsMenuBtn];
+    btns.forEach(btn => { if (btn) btn.classList.remove('active'); });
+    if (active === 'home' && homeMenuBtn) homeMenuBtn.classList.add('active');
+    else if (active === 'explore' && exploreMenuBtn) exploreMenuBtn.classList.add('active');
+    else if (active === 'profile' && profileMenuBtn) profileMenuBtn.classList.add('active');
+    else if (active === 'chat' && chatMenuBtn) chatMenuBtn.classList.add('active');
+    else if (active === 'settings' && settingsMenuBtn) settingsMenuBtn.classList.add('active');
 }
-function showHome() { homeView.classList.remove('hidden'); exploreView.classList.add('hidden'); profileView.classList.add('hidden'); chatView.classList.add('hidden'); settingsView.classList.add('hidden'); setActiveMenu('home'); }
-function showExplore() { homeView.classList.add('hidden'); exploreView.classList.remove('hidden'); profileView.classList.add('hidden'); chatView.classList.add('hidden'); settingsView.classList.add('hidden'); setActiveMenu('explore'); updateExploreResults(); }
-function showProfile() { homeView.classList.add('hidden'); exploreView.classList.add('hidden'); profileView.classList.remove('hidden'); chatView.classList.add('hidden'); settingsView.classList.add('hidden'); setActiveMenu('profile'); }
-function showChat() { homeView.classList.add('hidden'); exploreView.classList.add('hidden'); profileView.classList.add('hidden'); chatView.classList.remove('hidden'); settingsView.classList.add('hidden'); setActiveMenu('chat'); }
-function showSettings() { homeView.classList.add('hidden'); exploreView.classList.add('hidden'); profileView.classList.add('hidden'); chatView.classList.add('hidden'); settingsView.classList.remove('hidden'); setActiveMenu('settings'); }
-homeMenuBtn.onclick = showHome;
-exploreMenuBtn.onclick = showExplore;
-profileMenuBtn.onclick = showProfile;
-chatMenuBtn.onclick = showChat;
-settingsMenuBtn.onclick = showSettings;
+
+function showHome() { 
+    if (homeView) homeView.classList.remove('hidden');
+    if (exploreView) exploreView.classList.add('hidden');
+    if (profileView) profileView.classList.add('hidden');
+    if (chatView) chatView.classList.add('hidden');
+    if (settingsView) settingsView.classList.add('hidden');
+    setActiveMenu('home');
+}
+function showExplore() { 
+    if (homeView) homeView.classList.add('hidden');
+    if (exploreView) exploreView.classList.remove('hidden');
+    if (profileView) profileView.classList.add('hidden');
+    if (chatView) chatView.classList.add('hidden');
+    if (settingsView) settingsView.classList.add('hidden');
+    setActiveMenu('explore');
+}
+function showProfile() { 
+    if (homeView) homeView.classList.add('hidden');
+    if (exploreView) exploreView.classList.add('hidden');
+    if (profileView) profileView.classList.remove('hidden');
+    if (chatView) chatView.classList.add('hidden');
+    if (settingsView) settingsView.classList.add('hidden');
+    setActiveMenu('profile');
+}
+function showChat() { 
+    if (homeView) homeView.classList.add('hidden');
+    if (exploreView) exploreView.classList.add('hidden');
+    if (profileView) profileView.classList.add('hidden');
+    if (chatView) chatView.classList.remove('hidden');
+    if (settingsView) settingsView.classList.add('hidden');
+    setActiveMenu('chat');
+}
+function showSettings() { 
+    if (homeView) homeView.classList.add('hidden');
+    if (exploreView) exploreView.classList.add('hidden');
+    if (profileView) profileView.classList.add('hidden');
+    if (chatView) chatView.classList.add('hidden');
+    if (settingsView) settingsView.classList.remove('hidden');
+    setActiveMenu('settings');
+}
+
+if (homeMenuBtn) homeMenuBtn.onclick = showHome;
+if (exploreMenuBtn) exploreMenuBtn.onclick = showExplore;
+if (profileMenuBtn) profileMenuBtn.onclick = showProfile;
+if (chatMenuBtn) chatMenuBtn.onclick = showChat;
+if (settingsMenuBtn) settingsMenuBtn.onclick = showSettings;
 
 // ==================== EXPLORE ====================
 const searchInput = document.getElementById('searchInput');
@@ -667,122 +515,113 @@ const exploreResults = document.getElementById('exploreResults');
 let currentFilter = 'all';
 
 function showUserInfo(user) {
-    document.getElementById('infoAvatar').innerHTML = user.avatar;
-    document.getElementById('infoDisplayName').innerText = user.displayName;
-    document.getElementById('infoUsername').innerText = user.username;
-    const canSeeId = (user.privacy.userId === 'everyone') ||
-                     (user.privacy.userId === 'friends' && currentUser.friends.includes(user.username));
-    document.getElementById('infoUserId').innerText = canSeeId ? user.userId : 'Hidden';
-    document.getElementById('infoDescription').innerText = user.description || '(no description)';
+    if (document.getElementById('infoAvatar')) document.getElementById('infoAvatar').innerHTML = user.avatar || '👤';
+    if (document.getElementById('infoDisplayName')) document.getElementById('infoDisplayName').innerText = user.displayName;
+    if (document.getElementById('infoUsername')) document.getElementById('infoUsername').innerText = user.username;
+    if (document.getElementById('infoUserId')) document.getElementById('infoUserId').innerText = user.userId;
+    if (document.getElementById('infoDescription')) document.getElementById('infoDescription').innerText = user.description || '(no description)';
     openModal(userInfoModal);
 }
 
-function updateExploreResults() {
-    const searchTerm = searchInput.value.trim().toLowerCase();
+async function updateExploreResults() {
+    if (!exploreResults) return;
+    const searchTerm = searchInput?.value.trim().toLowerCase() || '';
+    
     if (currentFilter === 'all') {
-        const otherUsers = users.filter(u => u.username !== currentUser.username);
-        let filteredUsers = otherUsers;
-        if (searchTerm) {
-            filteredUsers = otherUsers.filter(u => u.username.toLowerCase().includes(searchTerm) || u.displayName.toLowerCase().includes(searchTerm));
-        }
-        const usersHtml = filteredUsers.map(user => `
-            <div class="user-list-item clickable" data-username="${escapeHtml(user.username)}">
-                <span class="user-list-username">${escapeHtml(user.displayName)} (${escapeHtml(user.username)}) ${getRoleBadge(user.role)}</span>
-            </div>
-        `).join('');
-        const gamesHtml = `<div class="user-list-item">🎮 Sample Game - Tester Only</div><div class="user-list-item">🕹️ Another Game - Coming Soon</div>`;
-        exploreResults.innerHTML = `
-            <div class="all-users-section"><h4 data-i18n="usersTitle">Users</h4>${usersHtml || '<div>No users found</div>'}</div>
-            <div class="all-games-section"><h4 data-i18n="gamesTitle">Games</h4>${gamesHtml}</div>
-        `;
-        document.querySelectorAll('.all-users-section .user-list-item').forEach(item => {
-            const username = item.getAttribute('data-username');
-            item.addEventListener('click', () => {
-                const targetUser = users.find(u => u.username === username);
-                if (targetUser) showUserInfo(targetUser);
-            });
-        });
-        applyLanguageOnlyText();
-        return;
-    } else if (currentFilter === 'user') {
-        const otherUsers = users.filter(u => u.username !== currentUser.username);
-        let filtered = otherUsers;
-        if (searchTerm) {
-            filtered = otherUsers.filter(u => u.username.toLowerCase().includes(searchTerm) || u.displayName.toLowerCase().includes(searchTerm));
-        }
-        if (filtered.length === 0) {
-            exploreResults.innerHTML = `<p data-i18n="noUsersFound">No users found</p>`;
-            applyLanguageOnlyText();
-            return;
-        }
-        const t = translations[currentLang];
-        exploreResults.innerHTML = filtered.map(user => {
-            let buttonText = t.addFriend;
-            let disabled = false;
-            let extraClass = '';
-            if (currentUser.friends.includes(user.username)) {
-                buttonText = t.friendsStatus;
-                disabled = true;
-                extraClass = 'disabled';
-            } else if (currentUser.sentRequests.includes(user.username)) {
-                buttonText = t.requestSent;
-                disabled = true;
-                extraClass = 'pending';
+        const usersResult = await apiCall('getAllUsers');
+        if (usersResult.success) {
+            const otherUsers = usersResult.users.filter(u => u.username !== currentUser?.username);
+            let filteredUsers = otherUsers;
+            if (searchTerm) {
+                filteredUsers = otherUsers.filter(u => u.username.toLowerCase().includes(searchTerm) || u.displayName.toLowerCase().includes(searchTerm));
             }
-            return `
+            const usersHtml = filteredUsers.map(user => `
+                <div class="user-list-item clickable" data-username="${escapeHtml(user.username)}">
+                    <span class="user-list-username">${escapeHtml(user.displayName)} (${escapeHtml(user.username)}) ${getRoleBadge(user.permissionLevel)}</span>
+                </div>
+            `).join('');
+            const gamesHtml = `<div class="user-list-item">🎮 Sample Game - Tester Only</div><div class="user-list-item">🕹️ Another Game - Coming Soon</div>`;
+            exploreResults.innerHTML = `
+                <div class="all-users-section"><h4>Users</h4>${usersHtml || '<div>No users found</div>'}</div>
+                <div class="all-games-section"><h4>Games</h4>${gamesHtml}</div>
+            `;
+            document.querySelectorAll('.all-users-section .user-list-item').forEach(item => {
+                const username = item.getAttribute('data-username');
+                item.addEventListener('click', async () => {
+                    const usersRes = await apiCall('getAllUsers');
+                    const targetUser = usersRes.users?.find(u => u.username === username);
+                    if (targetUser) showUserInfo(targetUser);
+                });
+            });
+        }
+    } else if (currentFilter === 'user') {
+        const usersResult = await apiCall('getAllUsers');
+        if (usersResult.success) {
+            const otherUsers = usersResult.users.filter(u => u.username !== currentUser?.username);
+            let filtered = otherUsers;
+            if (searchTerm) {
+                filtered = otherUsers.filter(u => u.username.toLowerCase().includes(searchTerm) || u.displayName.toLowerCase().includes(searchTerm));
+            }
+            if (filtered.length === 0) {
+                exploreResults.innerHTML = `<p>No users found</p>`;
+                return;
+            }
+            const t = translations[currentLang];
+            exploreResults.innerHTML = filtered.map(user => `
                 <div class="user-list-item clickable" data-username="${escapeHtml(user.username)}">
                     <div>
-                        <span class="user-list-username">${escapeHtml(user.displayName)} (${escapeHtml(user.username)}) ${getRoleBadge(user.role)}</span>
+                        <span class="user-list-username">${escapeHtml(user.displayName)} (${escapeHtml(user.username)}) ${getRoleBadge(user.permissionLevel)}</span>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        <button class="friend-action-btn ${extraClass}" data-username="${escapeHtml(user.username)}" ${disabled ? 'disabled' : ''}>${buttonText}</button>
+                        <button class="friend-action-btn" data-username="${escapeHtml(user.username)}">${t.addFriend}</button>
                         <button class="report-user-btn" data-username="${escapeHtml(user.username)}">🚩 Report</button>
                     </div>
                 </div>
-            `;
-        }).join('');
-        document.querySelectorAll('.user-list-item').forEach(item => {
-            const username = item.getAttribute('data-username');
-            item.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON') return;
-                const targetUser = users.find(u => u.username === username);
-                if (targetUser) showUserInfo(targetUser);
+            `).join('');
+            
+            document.querySelectorAll('.user-list-item').forEach(item => {
+                const username = item.getAttribute('data-username');
+                item.addEventListener('click', async (e) => {
+                    if (e.target.tagName === 'BUTTON') return;
+                    const usersRes = await apiCall('getAllUsers');
+                    const targetUser = usersRes.users?.find(u => u.username === username);
+                    if (targetUser) showUserInfo(targetUser);
+                });
             });
-        });
-        document.querySelectorAll('.friend-action-btn:not(.disabled):not(.pending)').forEach(btn => {
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                sendFriendRequest(btn.getAttribute('data-username'));
-            };
-        });
-        document.querySelectorAll('.report-user-btn').forEach(btn => {
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                const reportedUsername = btn.getAttribute('data-username');
-                const reason = prompt(`Why are you reporting ${reportedUsername}?`, "Spam, harassment, etc.");
-                if (reason && reason.trim()) {
-                    addReport(reportedUsername, reason);
-                }
-            };
-        });
-        applyLanguageOnlyText();
+            document.querySelectorAll('.friend-action-btn').forEach(btn => {
+                btn.onclick = (e) => { e.stopPropagation(); alert('Friend request coming soon'); };
+            });
+            document.querySelectorAll('.report-user-btn').forEach(btn => {
+                btn.onclick = async (e) => {
+                    e.stopPropagation();
+                    const reportedUsername = btn.getAttribute('data-username');
+                    const reason = prompt(`Why are you reporting ${reportedUsername}?`, "Spam, harassment, etc.");
+                    if (reason && reason.trim()) {
+                        await addReport(reportedUsername, reason);
+                    }
+                };
+            });
+        }
     } else if (currentFilter === 'game') {
-        exploreResults.innerHTML = `<p data-i18n="gamePlaceholder">Games - Tester Only</p><div class="user-list-item">🎮 Sample Game</div><div class="user-list-item">🕹️ Another Game</div>`;
-        applyLanguageOnlyText();
+        exploreResults.innerHTML = `<p>Games - Tester Only</p><div class="user-list-item">🎮 Sample Game</div><div class="user-list-item">🕹️ Another Game</div>`;
     }
+    applyLanguageOnlyText();
 }
 
-filterBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        filterBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentFilter = btn.getAttribute('data-filter');
-        updateExploreResults();
+if (filterBtns.length) {
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilter = btn.getAttribute('data-filter');
+            updateExploreResults();
+        });
     });
-});
-searchBtn.addEventListener('click', updateExploreResults);
-searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') updateExploreResults(); });
+}
+if (searchBtn) searchBtn.addEventListener('click', updateExploreResults);
+if (searchInput) searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') updateExploreResults(); });
 
+// Chat categories
 const catCards = document.querySelectorAll('.category-card');
 catCards.forEach(card => {
     card.onclick = () => {
@@ -792,6 +631,7 @@ catCards.forEach(card => {
     };
 });
 
+// Theme
 const whiteThemeBtn = document.getElementById('whiteThemeBtn');
 const blackThemeBtn = document.getElementById('blackThemeBtn');
 function applyTheme(theme) {
@@ -801,33 +641,32 @@ function applyTheme(theme) {
 }
 const savedTheme = localStorage.getItem('leblox_theme');
 applyTheme(savedTheme === 'light' ? 'light' : 'dark');
-whiteThemeBtn.onclick = () => applyTheme('light');
-blackThemeBtn.onclick = () => applyTheme('dark');
+if (whiteThemeBtn) whiteThemeBtn.onclick = () => applyTheme('light');
+if (blackThemeBtn) blackThemeBtn.onclick = () => applyTheme('dark');
 
+// Language
 const langSelect = document.getElementById('languageSelect');
 function loadSavedLanguage() {
     const saved = localStorage.getItem('leblox_lang');
-    if (saved && translations[saved]) { currentLang = saved; langSelect.value = saved; }
-    else { currentLang = 'en'; langSelect.value = 'en'; }
+    if (saved && translations[saved]) { currentLang = saved; if (langSelect) langSelect.value = saved; }
+    else { currentLang = 'en'; if (langSelect) langSelect.value = 'en'; }
     applyLanguage(currentLang);
 }
-langSelect.onchange = (e) => applyLanguage(e.target.value);
+if (langSelect) langSelect.onchange = (e) => applyLanguage(e.target.value);
 
 function loadMainApp() {
     showHome();
     updateSettingsUI();
     updateProfileInfoUI();
-    profileInfoBtn.classList.add('active');
-    avatarInfoBtn.classList.remove('active');
-    profileInfoPanel.classList.remove('hidden');
-    avatarPanel.classList.add('hidden');
-    closetTabBtn.classList.add('active');
-    shopTabBtn.classList.remove('active');
-    closetPanel.classList.remove('hidden');
-    shopPanel.classList.add('hidden');
+    if (profileInfoBtn) profileInfoBtn.classList.add('active');
+    if (avatarInfoBtn) avatarInfoBtn.classList.remove('active');
+    if (profileInfoPanel) profileInfoPanel.classList.remove('hidden');
+    if (avatarPanel) avatarPanel.classList.add('hidden');
+    if (closetTabBtn) closetTabBtn.classList.add('active');
+    if (shopTabBtn) shopTabBtn.classList.remove('active');
+    if (closetPanel) closetPanel.classList.remove('hidden');
+    if (shopPanel) shopPanel.classList.add('hidden');
     applyLanguage(currentLang);
-    updateFriendRequestsUI();
-    updateFriendsListUI();
 }
 
 function escapeHtml(str) {
